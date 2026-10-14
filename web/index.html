@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>真评 · 淘宝真实评论报告</title>
+<style>
+  :root {
+    --green: #16a34a; --blue: #2563eb; --yellow: #ca8a04;
+    --orange: #ea580c; --red: #dc2626; --gray: #6b7280;
+    --line: #e5e7eb; --bg: #f4f5f7; --card: #ffffff; --ink: #1f2937;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-size: 16px; line-height: 1.6;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; margin: 8px 0 14px; }
+  .card { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  textarea {
+    width: 100%; min-height: 72px; font-size: 16px; padding: 10px;
+    border: 1px solid var(--line); border-radius: 10px; resize: vertical;
+  }
+  button {
+    font-size: 17px; min-height: 48px; border: 0; border-radius: 10px;
+    background: var(--blue); color: #fff; width: 100%; margin-top: 10px;
+  }
+  button:disabled { opacity: .55; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px; vertical-align: -3px;
+    border: 2px solid #cbd5e1; border-top-color: var(--blue);
+    border-radius: 50%; animation: spin .8s linear infinite; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status { margin-top: 10px; color: var(--blue); }
+  #errbox { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fef2f2; color: var(--red); font-size: 15px; }
+  .product { display: flex; gap: 12px; align-items: center; }
+  .product img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--line); flex: none; }
+  .product .t { font-size: 16px; font-weight: 600; max-height: 4.2em; overflow: hidden; }
+  .grade-row { display: flex; align-items: center; gap: 16px; }
+  .grade-letter { font-size: 64px; font-weight: 800; line-height: 1; width: 88px; text-align: center; }
+  .grade-meta { flex: 1; }
+  .rating-line { font-size: 16px; margin-bottom: 6px; }
+  .rating-line .adj { font-size: 28px; font-weight: 800; color: var(--ink); }
+  .rating-line .old { color: var(--gray); text-decoration: line-through; }
+  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin-top: 10px; }
+  .bar > div { height: 100%; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--gray); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
+  .tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+  .tabs button { min-height: 44px; margin: 0; background: #e8eaf0; color: var(--ink); font-size: 15px; padding: 0 8px; }
+  .tabs button.on { background: var(--blue); color: #fff; }
+  .review { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .review:last-child { border-bottom: 0; }
+  .review .txt { margin-bottom: 6px; word-break: break-word; }
+  .review.dim .txt { color: var(--gray); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--green); }
+  .chip.gray { background: #f3f4f6; color: var(--gray); }
+  .chip.date { background: #f3f4f6; color: var(--gray); }
+  .chip.warn { background: #fef2f2; color: var(--red); }
+  .reason { color: var(--red); font-size: 14px; margin-top: 4px; }
+  table.meta { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.meta td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  table.meta td:last-child { text-align: right; color: var(--gray); }
+  details { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-top: 16px; }
+  summary { font-size: 16px; font-weight: 600; cursor: pointer; }
+  .hint { font-size: 13px; color: var(--gray); margin: 8px 0; }
+  .ok-msg { color: var(--green); font-size: 15px; margin-top: 8px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 真评</h1>
+
+  <div class="card">
+    <textarea id="url" placeholder="粘贴淘宝/天猫商品链接（浏览器地址栏整串复制）"></textarea>
+    <button id="btn" onclick="analyze()">分 析</button>
+    <div id="status" hidden><span class="spinner"></span>正在打开商品页抓取评论，约 20-60 秒</div>
+    <div id="errbox" hidden></div>
+  </div>
+
+  <div id="report" hidden>
+    <div class="card product">
+      <img id="p-img" alt="">
+      <div class="t" id="p-title"></div>
+    </div>
+
+    <div class="card">
+      <div class="grade-row">
+        <div class="grade-letter" id="grade">-</div>
+        <div class="grade-meta">
+          <div class="rating-line" id="rating-line" hidden>
+            <span class="old" id="rating-old"></span>
+            <span style="color:var(--gray)"> → </span>
+            <span class="adj" id="rating-adj"></span>
+            <span style="font-size:13px;color:var(--gray)">（真实评论均分）</span>
+          </div>
+          <div class="bar" id="bar">
+            <div style="background:var(--green)" id="bar-g"></div>
+            <div style="background:var(--yellow)" id="bar-s"></div>
+            <div style="background:#cbd5e1" id="bar-x"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--green)"></i>真实 <b id="n-g">0</b></span>
+            <span><i style="background:var(--yellow)"></i>可疑 <b id="n-s">0</b></span>
+            <span><i style="background:#cbd5e1"></i>边界 <b id="n-x">0</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="on" id="tab-btn-0" onclick="switchTab(0)">真实评论</button>
+      <button id="tab-btn-1" onclick="switchTab(1)">疑似水军</button>
+      <button id="tab-btn-2" onclick="switchTab(2)">数据</button>
+    </div>
+
+    <div class="card" id="tab-0"></div>
+    <div class="card" id="tab-1" hidden></div>
+    <div class="card" id="tab-2" hidden></div>
+  </div>
+
+  <details id="settings">
+    <summary>⚙️ 设置 · 导入淘宝 Cookie</summary>
+    <p class="hint">
+      手机看报告需要电脑先配好 Cookie：电脑 Chrome 登录淘宝 → 按 F12 → Network →
+      刷新页面 → 点第一个请求 → Request Headers → 把 Cookie 一整串复制粘贴到这里。
+      详细图文见 README。
+    </p>
+    <textarea id="cookie" placeholder="粘贴 Cookie 字符串（很长的一串，分号分隔）"></textarea>
+    <button onclick="saveCookie()">保存 Cookie</button>
+    <div class="ok-msg" id="cookie-ok" hidden>✓ 已保存</div>
+  </details>
+</div>
+
+<script>
+const GRADE_COLORS = { A: '#16a34a', B: '#2563eb', C: '#ca8a04', D: '#ea580c', F: '#dc2626', U: '#6b7280' };
+const ERR_TEXT = {
+  AUTH_REQUIRED: '登录已过期，请在下方设置更新 Cookie',
+  BAD_URL: '链接无法识别，请粘贴淘宝/天猫商品页链接',
+  NO_RATE_API: '没有抓到评论数据，商品可能没有评论或页面已改版',
+  TIMEOUT: '抓取超时，请稍后再试'
+};
+let REPORT = null;
+
+async function analyze() {
+  const url = document.getElementById('url').value.trim();
+  if (!url) { showError('请先粘贴商品链接'); return; }
+  showError('');
+  setStatus(true);
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
+    });
+    const data = await resp.json();
+    REPORT = data;
+    if (data.error) {
+      showError(ERR_TEXT[data.error.code] || ('出错了：' + data.error.message));
+      if (data.error.code === 'AUTH_REQUIRED') {
+        document.getElementById('settings').open = true;
+      }
+    } else {
+      renderReport(data);
+    }
+  } catch (e) {
+    showError('无法连接服务，请确认电脑上服务已启动');
+  } finally {
+    setStatus(false);
+  }
+}
+
+function setStatus(busy) {
+  document.getElementById('btn').disabled = busy;
+  document.getElementById('status').hidden = !busy;
+}
+
+function showError(msg) {
+  const box = document.getElementById('errbox');
+  if (!msg) { box.hidden = true; box.textContent = ''; return; }
+  box.hidden = false; box.textContent = msg;
+}
+
+function chip(text, cls) {
+  return '<span class="chip ' + (cls || '') + '">' + esc(text) + '</span>';
+}
+
+function renderReport(d) {
+  document.getElementById('report').hidden = false;
+  document.getElementById('p-title').textContent = d.product.title || '（未取到商品标题）';
+  const img = document.getElementById('p-img');
+  if (d.product.image_url) { img.src = d.product.image_url; img.hidden = false; } else { img.hidden = true; }
+
+  const g = document.getElementById('grade');
+  g.textContent = d.grade || '-';
+  g.style.color = GRADE_COLORS[d.grade] || '#1f2937';
+
+  const line = document.getElementById('rating-line');
+  const ro = d.rating.original, ra = d.rating.adjusted;
+  if (ro == null && ra == null) { line.hidden = true; }
+  else {
+    line.hidden = false;
+    document.getElementById('rating-old').textContent = (ro == null ? '' : '★' + ro);
+    document.getElementById('rating-adj').textContent = ra == null ? '—' : '★' + ra;
+  }
+
+  const st = d.stats, total = Math.max(st.total, 1);
+  document.getElementById('bar-g').style.width = (st.genuine / total * 100) + '%';
+  document.getElementById('bar-s').style.width = (st.suspicious / total * 100) + '%';
+  document.getElementById('bar-x').style.width = (st.gray / total * 100) + '%';
+  document.getElementById('n-g').textContent = st.genuine;
+  document.getElementById('n-s').textContent = st.suspicious;
+  document.getElementById('n-x').textContent = st.gray;
+
+  // 真实评论 tab：genuine 排好序在前，gray 桶置灰追加在后（V0 不自动判死）
+  const genuine = d.reviews.filter(r => r.verdict === 'genuine');
+  const gray = d.reviews.filter(r => r.verdict === 'gray');
+  const html = genuine.map(r =>
+    '<div class="review"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
+    (r.tags || []).map(t => chip(t)).join('') + chip(r.date || '', 'date') + '</div></div>'
+  ).join('')
+  + (gray.length ? '<div class="review dim"><div class="chips" style="margin-bottom:6px">' + chip('边界（未判定）', 'gray') + '</div></div>' : '')
+  + gray.map(r =>
+    '<div class="review dim"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
+    (r.tags || []).map(t => chip(t, 'gray')).join('') + chip(r.date || '', 'date') + chip('边界', 'gray') + '</div></div>'
+  ).join('');
+  document.getElementById('tab-0').innerHTML = html || '<div class="hint">没有评论</div>';
+
+  // 疑似水军 tab
+  const sus = d.suspicious.map(r =>
+    '<div class="review"><div class="txt">' + esc(r.text) + '</div>' +
+    '<div class="reason">⚠ ' + (r.reasons || []).map(esc).join('；') + '</div>' +
+    '<div class="chips" style="margin-top:6px">' + chip(r.date || '', 'date') + '</div></div>'
+  ).join('');
+  document.getElementById('tab-1').innerHTML = sus || '<div class="hint">没有发现疑似水军评论</div>';
+
+  // 数据 tab
+  document.getElementById('tab-2').innerHTML =
+    '<table class="meta">' +
+    '<tr><td>抓取页数</td><td>' + d.meta.fetched_pages + '</td></tr>' +
+    '<tr><td>抓取评论数</td><td>' + d.meta.fetched_count + '</td></tr>' +
+    '<tr><td>有效评论数（清洗后）</td><td>' + st.total + '</td></tr>' +
+    '<tr><td>耗时</td><td>' + d.meta.elapsed_sec + ' 秒</td></tr>' +
+    '</table>';
+  switchTab(0);
+}
+
+function switchTab(i) {
+  for (let k = 0; k < 3; k++) {
+    document.getElementById('tab-' + k).hidden = (k !== i);
+    document.getElementById('tab-btn-' + k).classList.toggle('on', k === i);
+  }
+}
+
+async function saveCookie() {
+  const v = document.getElementById('cookie').value.trim();
+  if (!v) { showError('Cookie 内容为空'); return; }
+  showError('');
+  try {
+    const resp = await fetch('/api/settings/cookie', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cookie: v })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('cookie-ok').hidden = false;
+      setTimeout(() => { document.getElementById('cookie-ok').hidden = true; }, 3000);
+    } else {
+      showError('保存失败，请重试');
+    }
+  } catch (e) {
+    showError('无法连接服务');
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
