@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>真评 · 真实评论报告</title>
+<style>
+  :root {
+    --green: #16a34a; --blue: #2563eb; --yellow: #ca8a04;
+    --orange: #ea580c; --red: #dc2626; --gray: #6b7280;
+    --line: #e5e7eb; --bg: #f4f5f7; --card: #ffffff; --ink: #1f2937;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-size: 16px; line-height: 1.6;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; margin: 8px 0 14px; }
+  .card { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .product { display: flex; gap: 12px; align-items: center; }
+  .product img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--line); flex: none; }
+  .product .t { font-size: 16px; font-weight: 600; max-height: 4.2em; overflow: hidden; }
+  .grade-row { display: flex; align-items: center; gap: 16px; }
+  .grade-letter { font-size: 64px; font-weight: 800; line-height: 1; width: 88px; text-align: center; }
+  .grade-meta { flex: 1; }
+  .rating-line { font-size: 16px; margin-bottom: 6px; }
+  .rating-line .adj { font-size: 28px; font-weight: 800; color: var(--ink); }
+  .rating-line .old { color: var(--gray); text-decoration: line-through; }
+  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin-top: 10px; }
+  .bar > div { height: 100%; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--gray); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
+  .tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+  .tabs button { min-height: 44px; margin: 0; background: #e8eaf0; color: var(--ink); font-size: 15px; padding: 0 8px; }
+  .tabs button.on { background: var(--blue); color: #fff; }
+  .review { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .review:last-child { border-bottom: 0; }
+  .review .txt { margin-bottom: 6px; word-break: break-word; }
+  .review.dim .txt { color: var(--gray); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--green); }
+  .chip.gray { background: #f3f4f6; color: var(--gray); }
+  .chip.date { background: #f3f4f6; color: var(--gray); }
+  .reason { color: var(--red); font-size: 14px; margin-top: 4px; }
+  table.meta { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.meta td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  table.meta td:last-child { text-align: right; color: var(--gray); }
+  .hint { font-size: 13px; color: var(--gray); margin: 8px 0; }
+  #errbox { padding: 10px 12px; border-radius: 10px; background: #fef2f2; color: var(--red); font-size: 15px; margin-bottom: 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 真评 · 报告</h1>
+  <div id="errbox" hidden></div>
+
+  <div id="report" hidden>
+    <div class="card product">
+      <img id="p-img" alt="">
+      <div class="t" id="p-title"></div>
+    </div>
+
+    <div class="card">
+      <div class="grade-row">
+        <div class="grade-letter" id="grade">-</div>
+        <div class="grade-meta">
+          <div class="rating-line" id="rating-line" hidden>
+            <span class="old" id="rating-old"></span>
+            <span style="color:var(--gray)"> → </span>
+            <span class="adj" id="rating-adj"></span>
+            <span style="font-size:13px;color:var(--gray)">（真实评论均分）</span>
+          </div>
+          <div class="bar" id="bar">
+            <div style="background:var(--green)" id="bar-g"></div>
+            <div style="background:var(--yellow)" id="bar-s"></div>
+            <div style="background:#cbd5e1" id="bar-x"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--green)"></i>真实 <b id="n-g">0</b></span>
+            <span><i style="background:var(--yellow)"></i>可疑 <b id="n-s">0</b></span>
+            <span><i style="background:#cbd5e1"></i>边界 <b id="n-x">0</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="on" id="tab-btn-0" onclick="switchTab(0)">真实评论</button>
+      <button id="tab-btn-1" onclick="switchTab(1)">疑似水军</button>
+      <button id="tab-btn-2" onclick="switchTab(2)">数据</button>
+    </div>
+
+    <div class="card" id="tab-0"></div>
+    <div class="card" id="tab-1" hidden></div>
+    <div class="card" id="tab-2" hidden></div>
+  </div>
+</div>
+
+<script>
+// 渲染逻辑抽取自 web/index.html 的 renderReport（index.html 保持原样），
+// 本页是其子集功能：读 ?id= → GET /api/report/<id> → 渲染，无输入无设置。
+const GRADE_COLORS = { A: '#16a34a', B: '#2563eb', C: '#ca8a04', D: '#ea580c', F: '#dc2626', U: '#6b7280' };
+
+async function load() {
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) { showError('缺少报告 id，请从扩展重新发起分析'); return; }
+  try {
+    const resp = await fetch('/api/report/' + encodeURIComponent(id));
+    if (resp.status === 404) { showError('报告不存在或已被清理，请从扩展重新发起分析'); return; }
+    const data = await resp.json();
+    if (data.error) { showError('报告错误：' + data.error.message); return; }
+    renderReport(data);
+  } catch (e) {
+    showError('无法连接服务，请确认电脑上服务已启动');
+  }
+}
+
+function showError(msg) {
+  const box = document.getElementById('errbox');
+  box.hidden = false;
+  box.textContent = msg;
+}
+
+function chip(text, cls) {
+  return '<span class="chip ' + (cls || '') + '">' + esc(text) + '</span>';
+}
+
+function renderReport(d) {
+  document.getElementById('report').hidden = false;
+  document.getElementById('p-title').textContent = d.product.title || '（未取到商品标题）';
+  const img = document.getElementById('p-img');
+  if (d.product.image_url) { img.src = d.product.image_url; img.hidden = false; } else { img.hidden = true; }
+
+  const g = document.getElementById('grade');
+  g.textContent = d.grade || '-';
+  g.style.color = GRADE_COLORS[d.grade] || '#1f2937';
+
+  const line = document.getElementById('rating-line');
+  const ro = d.rating.original, ra = d.rating.adjusted;
+  if (ro == null && ra == null) { line.hidden = true; }
+  else {
+    line.hidden = false;
+    document.getElementById('rating-old').textContent = (ro == null ? '' : '★' + ro);
+    document.getElementById('rating-adj').textContent = ra == null ? '—' : '★' + ra;
+  }
+
+  const st = d.stats, total = Math.max(st.total, 1);
+  document.getElementById('bar-g').style.width = (st.genuine / total * 100) + '%';
+  document.getElementById('bar-s').style.width = (st.suspicious / total * 100) + '%';
+  document.getElementById('bar-x').style.width = (st.gray / total * 100) + '%';
+  document.getElementById('n-g').textContent = st.genuine;
+  document.getElementById('n-s').textContent = st.suspicious;
+  document.getElementById('n-x').textContent = st.gray;
+
+  const genuine = d.reviews.filter(r => r.verdict === 'genuine');
+  const gray = d.reviews.filter(r => r.verdict === 'gray');
+  const html = genuine.map(r =>
+    '<div class="review"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
+    (r.tags || []).map(t => chip(t)).join('') + chip(r.date || '', 'date') + '</div></div>'
+  ).join('')
+  + (gray.length ? '<div class="review dim"><div class="chips" style="margin-bottom:6px">' + chip('边界（未判定）', 'gray') + '</div></div>' : '')
+  + gray.map(r =>
+    '<div class="review dim"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
+    (r.tags || []).map(t => chip(t, 'gray')).join('') + chip(r.date || '', 'date') + chip('边界', 'gray') + '</div></div>'
+  ).join('');
+  document.getElementById('tab-0').innerHTML = html || '<div class="hint">没有评论</div>';
+
+  const sus = d.suspicious.map(r =>
+    '<div class="review"><div class="txt">' + esc(r.text) + '</div>' +
+    '<div class="reason">⚠ ' + (r.reasons || []).map(esc).join('；') + '</div>' +
+    '<div class="chips" style="margin-top:6px">' + chip(r.date || '', 'date') + '</div></div>'
+  ).join('');
+  document.getElementById('tab-1').innerHTML = sus || '<div class="hint">没有发现疑似水军评论</div>';
+
+  document.getElementById('tab-2').innerHTML =
+    '<table class="meta">' +
+    '<tr><td>来源</td><td>浏览器扩展</td></tr>' +
+    '<tr><td>抓取评论数</td><td>' + d.meta.fetched_count + '</td></tr>' +
+    '<tr><td>有效评论数（清洗后）</td><td>' + st.total + '</td></tr>' +
+    '<tr><td>分析耗时</td><td>' + d.meta.elapsed_sec + ' 秒</td></tr>' +
+    '</table>';
+  switchTab(0);
+}
+
+function switchTab(i) {
+  for (let k = 0; k < 3; k++) {
+    document.getElementById('tab-' + k).hidden = (k !== i);
+    document.getElementById('tab-btn-' + k).classList.toggle('on', k === i);
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+load();
+</script>
+</body>
+</html>
