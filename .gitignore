@@ -1,0 +1,12 @@
+# 凭据：绝不入库
+config_local.py
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# 日志与浏览器用户数据
+*.log
+pw-profile/
