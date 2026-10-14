@@ -10,3 +10,5 @@ __pycache__/
 # 日志与浏览器用户数据
 *.log
 pw-profile/
+chrome-clone/
+chrome-profile/

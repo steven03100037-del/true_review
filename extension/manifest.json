@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "真评 · 评论收集器",
+  "version": "0.1.0",
+  "description": "在天猫/淘宝商品页内旁听评价接口，交给本地「真评」服务生成真实评论报告。",
+  "permissions": ["scripting", "tabs"],
+  "host_permissions": ["http://127.0.0.1:8000/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "真评"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://detail.tmall.com/item.htm*",
+        "https://item.taobao.com/item.htm*"
+      ],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject_main.js"],
+      "matches": [
+        "https://detail.tmall.com/*",
+        "https://item.taobao.com/*"
+      ]
+    }
+  ]
+}

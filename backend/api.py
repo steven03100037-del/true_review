@@ -7,6 +7,7 @@
 
 import importlib.util
 import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,20 @@ class AnalyzeRequest(BaseModel):
 
 class CookieRequest(BaseModel):
     cookie: str
+
+
+class IngestRequest(BaseModel):
+    """Chrome 扩展上报的页面数据（V0.1，见 docs/V0.1_扩展改造笔.md §4）。"""
+
+    product: dict = {}
+    page_url: str = ""
+    reviews: list = []
+
+
+# ---------------- 报告内存库（V0.1：扩展入口） ----------------
+
+_REPORTS: dict = {}          # report_id -> {"report": {...}, "page_url": str, "created": float}
+_REPORTS_MAX = 50            # 上限 50 份，超出淘汰最旧（玩票足够）
 
 
 # ---------------- 错误码中文提示 ----------------
@@ -142,6 +157,37 @@ def analyze(req: AnalyzeRequest):
         )
 
 
+@app.post("/api/ingest")
+def ingest(req: IngestRequest):
+    """接收扩展上报的评论，复用 V0 过滤管线，产出与 V0 完全同构的报告 JSON。"""
+    started = time.monotonic()
+    judged = filter_heuristic.filter_reviews(cleaner.clean_reviews(req.reviews))
+    meta = {"fetched_pages": 0, "fetched_count": len(req.reviews)}
+    report = _build_report(req.product or {}, judged, meta, time.monotonic() - started)
+
+    report_id = "r_" + uuid.uuid4().hex[:8]
+    _REPORTS[report_id] = {
+        "report": report,
+        "page_url": req.page_url,
+        "created": time.time(),
+    }
+    while len(_REPORTS) > _REPORTS_MAX:  # 淘汰最旧
+        oldest = min(_REPORTS, key=lambda k: _REPORTS[k]["created"])
+        del _REPORTS[oldest]
+    return {"report_id": report_id}
+
+
+@app.get("/api/report/{report_id}")
+def get_report(report_id: str):
+    entry = _REPORTS.get(report_id)
+    if not entry:
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"code": "NOT_FOUND", "message": "报告不存在或已被清理"}},
+        )
+    return entry["report"]
+
+
 @app.post("/api/settings/cookie")
 def save_cookie(req: CookieRequest):
     """保存淘宝 Cookie 到 config_local.py（保留其它已有配置项）。"""
@@ -172,3 +218,12 @@ def index():
     if not WEB_INDEX.is_file():
         return JSONResponse(status_code=404, content={"error": "页面文件缺失"})
     return FileResponse(WEB_INDEX, media_type="text/html")
+
+
+@app.get("/report.html")
+def report_page():
+    """扩展报告页（V0.1）：background 打开 /report.html?id=<report_id>。"""
+    path = PROJECT_ROOT / "web" / "report.html"
+    if not path.is_file():
+        return JSONResponse(status_code=404, content={"error": "页面文件缺失"})
+    return FileResponse(path, media_type="text/html")
