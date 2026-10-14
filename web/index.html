@@ -246,6 +246,7 @@ function renderReport(d) {
     '<tr><td>抓取评论数</td><td>' + d.meta.fetched_count + '</td></tr>' +
     '<tr><td>有效评论数（清洗后）</td><td>' + st.total + '</td></tr>' +
     '<tr><td>耗时</td><td>' + d.meta.elapsed_sec + ' 秒</td></tr>' +
+    (d.meta.truncated_by_timeout ? '<tr><td>数据截断</td><td>⚠ 抓取超时，仅返回已抓取部分</td></tr>' : '') +
     '</table>';
   switchTab(0);
 }

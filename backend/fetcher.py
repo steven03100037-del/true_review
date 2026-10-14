@@ -165,6 +165,26 @@ def load_cookie_string() -> str:
     return getattr(module, "TAOBAO_COOKIE", "") or ""
 
 
+def _should_stop_collecting(
+    rounds_no_new: int, rate_hits: int, review_count: int,
+    *, max_pages: int, max_reviews: int,
+) -> bool:
+    """翻页循环终止判定（纯函数）。
+
+    任一条件成立即停：
+    - 连续 NO_NEW_ROUNDS_GIVEUP 轮滚动无新评论（翻到底了）；
+    - 命中评论接口次数 ≥ max_pages；
+    - 已收评论数 ≥ max_reviews。
+    """
+    if rounds_no_new >= NO_NEW_ROUNDS_GIVEUP:
+        return True
+    if rate_hits >= max_pages:
+        return True
+    if review_count >= max_reviews:
+        return True
+    return False
+
+
 # ---------------- 抓取主流程 ----------------
 
 def fetch_product_reviews(
@@ -348,10 +368,13 @@ def _fetch_with_browser(open_url, cookies, *, max_pages, max_reviews, deadline_s
 
             # 翻页：滚动触发加载，页间随机 1~2s；5 页或 200 条先到为准
             no_new_rounds = 0
-            while (state["rate_hits"] < max_pages
-                   and len(raw_reviews) < max_reviews):
+            while not _should_stop_collecting(
+                no_new_rounds, state["rate_hits"],
+                len(raw_reviews), max_pages=max_pages, max_reviews=max_reviews,
+            ):
                 if expired():
-                    raise FetchError("TIMEOUT", "抓取评论超时，请稍后再试")
+                    break  # 到点收工：已有数据在收尾正常返回，无数据才按 TIMEOUT
+                prev_count = len(raw_reviews)
                 try:
                     page.mouse.wheel(0, 4000)
                     page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
@@ -360,13 +383,12 @@ def _fetch_with_browser(open_url, cookies, *, max_pages, max_reviews, deadline_s
                 page.wait_for_timeout(
                     int(random.uniform(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX) * 1000)
                 )
-                if len(raw_reviews) == 0:
-                    no_new_rounds += 1
-                    if no_new_rounds >= NO_NEW_ROUNDS_GIVEUP and state["rate_hits"] == 0:
-                        break  # 始终无评论接口命中，交给收尾判定
-                elif len(raw_reviews) >= max_reviews:
-                    break
+                if len(raw_reviews) > prev_count:
+                    no_new_rounds = 0    # 该轮有新评论，计数归零
+                else:
+                    no_new_rounds += 1   # 该轮无增长
 
+            timed_out = expired()  # 超时但已抓到数据：返回已有部分，不丢弃
             if state["login_page"] or (
                 state["login_expired"] and not raw_reviews
             ):
@@ -375,12 +397,12 @@ def _fetch_with_browser(open_url, cookies, *, max_pages, max_reviews, deadline_s
                     "淘宝登录已过期或无效，请在页面下方「设置」中更新 Cookie",
                 )
             if not raw_reviews:
+                if timed_out:
+                    raise FetchError("TIMEOUT", "抓取评论超时，请稍后再试")
                 raise FetchError(
                     "NO_RATE_API",
                     "没有抓到评论数据（接口未命中或该商品没有评论）",
                 )
-            if expired():
-                raise FetchError("TIMEOUT", "抓取评论超时，请稍后再试")
 
             return {
                 "product": product,
@@ -388,6 +410,7 @@ def _fetch_with_browser(open_url, cookies, *, max_pages, max_reviews, deadline_s
                 "meta": {
                     "fetched_pages": min(state["rate_hits"], max_pages),
                     "fetched_count": len(raw_reviews),
+                    **({"truncated_by_timeout": True} if timed_out else {}),
                 },
             }
         finally:

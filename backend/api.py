@@ -110,6 +110,7 @@ def _build_report(product: dict, judged: list, meta: dict, elapsed: float) -> di
             "fetched_pages": meta.get("fetched_pages", 0),
             "fetched_count": meta.get("fetched_count", 0),
             "elapsed_sec": round(elapsed, 1),
+            **({"truncated_by_timeout": True} if meta.get("truncated_by_timeout") else {}),
         },
         "error": None,
     }
