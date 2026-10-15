@@ -52,13 +52,21 @@
       status("已收集 " + collected.size + " 条…");
     } else if (m.type === "END") {
       running = false;
-      var total = collected.size;
+      // DOM 扫描通道（m.reviews）为主，hook 通道（collected）数据并入去重
+      var merged = {};
+      var order = [];
+      var addOne = function (r) {
+        if (r && r.text && !merged[r.text]) { merged[r.text] = r; order.push(r); }
+      };
+      (m.reviews || []).forEach(addOne);
+      collected.forEach(addOne);
+      var total = order.length;
       if (total === 0) {
         status("未检测到评价数据，正在生成空报告…");
       } else {
         var head =
-          m.reason === "timeout" ? "60 秒超时，返回已收集部分" :
-          m.reason === "cap" ? "已达 200 条上限" :
+          m.reason === "timeout" ? "240 秒超时，返回已收集部分" :
+          m.reason === "cap" ? "已达 300 条上限" :
           m.reason === "no-more" ? "没有更多评价了" : "收集结束";
         status(head + "（共 " + total + " 条），正在生成报告…");
       }
@@ -67,7 +75,7 @@
         payload: {
           product: grabProduct(),
           page_url: location.href,
-          reviews: Array.from(collected.values()),
+          reviews: order,
         },
       }, function (resp) {
         if (chrome.runtime.lastError) {
@@ -96,5 +104,20 @@
 
   function status(text) {
     try { chrome.runtime.sendMessage({ type: "STATUS", text: text }); } catch (e) { /* popup 可能已关闭 */ }
+  }
+
+  // 页面打开即常驻装好 hook（不等用户点击）：评价数据若在初始加载时就拉取，也能被旁听到。
+  // inject_main 二次注入会走 __ZHENPING_HOOKED__ 分支，只重开一轮收集，hook 不重复安装。
+  function armHookEarly() {
+    chrome.runtime.sendMessage({ type: "INJECT_MAIN" }, function (resp) {
+      if (chrome.runtime.lastError || !resp || !resp.ok) {
+        setTimeout(armHookEarly, 2000); // 页面尚未就绪时退避重试
+      }
+    });
+  }
+  if (document.readyState === "complete") {
+    setTimeout(armHookEarly, 1000);
+  } else {
+    window.addEventListener("load", function () { setTimeout(armHookEarly, 1000); });
   }
 })();
