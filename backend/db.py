@@ -62,7 +62,8 @@ def _ensure():
 
 def _connect():
     _ensure()
-    return sqlite3.connect(DB_PATH)
+    # timeout=10：ingest 落库与 enhance 回写是两条并发挥写路径，写锁竞争时等待而非立即失败
+    return sqlite3.connect(DB_PATH, timeout=10)
 
 
 def goods_id_from_url(page_url: str):
