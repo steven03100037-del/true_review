@@ -23,8 +23,8 @@
   // 面板为懒加载分批渲染（快照实证：一次只渲染可见 ~20 条），全量靠步进滚动逐批收
   var COLLECT_MAX_REVIEWS = 300;      // 达 300 条（1000+ 商品拿子集分析够用）
   var COLLECT_MAX_SECONDS = 240;      // 240s 超时（滚动逐批收集比接口翻页慢）
-  var NO_NEW_ROUNDS_GIVEUP = 3;       // 连续 3 轮无新评论（保留）
-  var SCROLL_STEP_RATIO = 0.8;        // 每轮滚 80% 容器视口高；跳底会跳过中间批次（§1.2）
+  var NO_NEW_ROUNDS_GIVEUP = 6;       // 连续 6 轮无新评论（批间加载实测 ~2s，3 轮容错不够）
+  var SCROLL_STEP_RATIO = 1.2;        // 每轮滚 1.2 倍容器视口高（20 张/批 ≈ 6400px，步长加大提速；跳底反而不取，仍需逐步）
 
   var SCROLL_WAIT_MIN_MS = 1000;      // 轮间等待下限
   var SCROLL_WAIT_MAX_MS = 2000;      // 轮间等待上限
@@ -321,7 +321,28 @@
         setTimeout(tick, wait);
       }, 600); // 给懒加载响应留出到达时间，再判定本轮是否有新
     };
-    setTimeout(tick, 800);
+    // 面板就绪门：等首批卡片渲染出来（或容器可滚）才开始收集计时，
+    // 否则 3~6 轮放弃判定会跑赢面板加载，收工时只扫到预览区
+    var waitForPanel = function (tries) {
+      var ready = document.querySelectorAll(CARD_SELECTOR).length > 0;
+      if (!ready) {
+        try {
+          var cs = document.querySelectorAll(SCROLL_CONTAINER_SEL);
+          for (var i = 0; i < cs.length; i++) {
+            if (cs[i].scrollHeight > cs[i].clientHeight) { ready = true; break; }
+          }
+        } catch (e) { /* 忽略 */ }
+      }
+      if (ready) {
+        st.startAt = Date.now(); // 计时从就绪起算，等待期不占用 240s 预算
+        setTimeout(tick, 400);
+      } else if (tries > 0) {
+        setTimeout(function () { waitForPanel(tries - 1); }, 500); // 每 0.5s 复查，最多 15s
+      } else {
+        setTimeout(tick, 200); // 等不到（无面板场景）也开跑，走预览区/启发式原有流程
+      }
+    };
+    waitForPanel(30);
   }
 
   function finish(reason) {
