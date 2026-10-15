@@ -65,8 +65,8 @@
         status("未检测到评价数据，正在生成空报告…");
       } else {
         var head =
-          m.reason === "timeout" ? "60 秒超时，返回已收集部分" :
-          m.reason === "cap" ? "已达 200 条上限" :
+          m.reason === "timeout" ? "240 秒超时，返回已收集部分" :
+          m.reason === "cap" ? "已达 300 条上限" :
           m.reason === "no-more" ? "没有更多评价了" : "收集结束";
         status(head + "（共 " + total + " 条），正在生成报告…");
       }

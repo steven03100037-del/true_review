@@ -1,6 +1,6 @@
-// 真评 · MAIN world 注入脚本：hook XHR/fetch 旁听评价接口 + 自动滚动翻页 + 评论提取。
+// 真评 · MAIN world 注入脚本：hook XHR/fetch 旁听评价接口 + 评价面板 DOM 扫描 + 步进滚动全量采集。
 // 与 V0 backend/fetcher.py 同款纪律：接口匹配规则与字段路径全部集中在常量区，改版只改这里。
-// TODO(V0.2)：接口旁听失败（零命中）时的 DOM 解析兜底方案（见 V0.1 改造笔 §6 边界清单）。
+// V0.1.2：DOM 选择器已按真实页面快照校准（选择器主路径 + 旧启发式降级保险），原 V0.2 兜底 TODO 已落地。
 (function () {
   "use strict";
 
@@ -20,9 +20,11 @@
   var RATE_TAB_TEXTS = ["用户评价", "全部评价", "累计评价"];
 
   // 终止条件（与 V0 修复后语义一致）：任一满足即收工
-  var COLLECT_MAX_REVIEWS = 200;      // 达 200 条
-  var COLLECT_MAX_SECONDS = 60;       // 60s 超时
-  var NO_NEW_ROUNDS_GIVEUP = 3;       // 连续 3 轮无新评论
+  // 面板为懒加载分批渲染（快照实证：一次只渲染可见 ~20 条），全量靠步进滚动逐批收
+  var COLLECT_MAX_REVIEWS = 300;      // 达 300 条（1000+ 商品拿子集分析够用）
+  var COLLECT_MAX_SECONDS = 240;      // 240s 超时（滚动逐批收集比接口翻页慢）
+  var NO_NEW_ROUNDS_GIVEUP = 3;       // 连续 3 轮无新评论（保留）
+  var SCROLL_STEP_RATIO = 0.8;        // 每轮滚 80% 容器视口高；跳底会跳过中间批次（§1.2）
 
   var SCROLL_WAIT_MIN_MS = 1000;      // 轮间等待下限
   var SCROLL_WAIT_MAX_MS = 2000;      // 轮间等待上限
@@ -30,9 +32,14 @@
   var JSON_WALK_MAX_DEPTH = 12;
   var POST_SOURCE = "zhenping-inject";
 
-  // DOM 扫描：评价卡片选择器。CSS modules 的哈希后缀会随版本变，用 -- 前缀匹配；
-  // 实测卡片 class "comments--xxx"，父容器 "Comments--xxx"（大写 C，不会被误匹配）。
-  var CARD_SELECTOR = '[class*="comments--"]';
+  // 2026-10-15 由真实页面快照校准（V0.1.2 笔 §1）：
+  // 滚动容器=comments--xxx（小写复数）；单条卡片=Comment--xxx（大写单数，区分大小写不会误命中）。
+  // 卡片内子元素正文 content-- / 日期+已购 meta-- / 相册 album-- / 商家回复 reply--（正文与商家回复是兄弟节点）。
+  var SCROLL_CONTAINER_SEL = '[class*="comments--"]'; // 面板内滚动容器（beautify-scroll-bar）
+  var CARD_SELECTOR = '[class*="Comment--"]';          // 单条评价卡片
+  var CONTENT_SEL = '[class*="content--"]';            // 卡片正文
+  var META_SEL = '[class*="meta--"]';                  // 日期 + 已购SKU
+  var ALBUM_SEL = '[class*="album--"]';                // 相册（带图判定）
 
   // ==================== 常量区结束 ====================
 
@@ -225,21 +232,38 @@
   var DATE_RE = /(\d{4}-\d{2}-\d{2})|(\d{4}年\d{1,2}月\d{1,2}日)/; // 兼容 2026-09-23 与 2026年9月23日
 
   function scanCommentsDOM(st) {
-    // 启发式找卡片：含日期文本的最内层块（不绑 class，抗改版）；
-    // 面板里每条含：昵称/日期/已购SKU/正文/商家回复——正文为主，"商家回复"之后截断
+    var cards = document.querySelectorAll(CARD_SELECTOR);
+    if (!cards.length) { scanCommentsHeuristic(st); return; } // 页面改版断选择器时退回启发式，不至于全灭
+    for (var i = 0; i < cards.length; i++) {
+      var el = cards[i];
+      var textEl = el.querySelector(CONTENT_SEL);
+      var clean = textEl ? (textEl.textContent || "").replace(/\s+/g, " ").trim() : "";
+      if (clean.length < 5 || st.seen.has(clean)) continue; // 正文元素缺失则弃卡，不整卡截断
+      var metaText = "";
+      var metaEl = el.querySelector(META_SEL);
+      if (metaEl) metaText = metaEl.textContent || "";
+      var dm = metaText.match(DATE_RE);
+      var tags = [];
+      try { if (el.querySelector(ALBUM_SEL)) tags.push("带图"); } catch (e) { /* 忽略 */ }
+      if (/追评/.test(el.textContent || "")) tags.push("追评");
+      st.seen.add(clean);
+      st.reviews.push({ text: clean, date: dm ? dm[0] : null, tags: tags, star: null });
+    }
+  }
+
+  // 降级保险：旧版启发式（含日期的最内层块）。仅在精确选择器零命中时使用。
+  function scanCommentsHeuristic(st) {
     var nodes = document.querySelectorAll("div,li");
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       var t = el.textContent || "";
       if (!DATE_RE.test(t) || t.length > 900 || t.length < 30) continue;
-      // 最内层：子 div/li 里也存在日期匹配 → 本元素是外层，跳过
       var subs = el.querySelectorAll("div,li");
       var hasInner = false;
       for (var j = 0; j < subs.length; j++) {
         if (DATE_RE.test(subs[j].textContent || "")) { hasInner = true; break; }
       }
       if (hasInner) continue;
-
       var clean = t.replace(/\s+/g, " ").trim();
       clean = clean.split("商家回复")[0].trim();
       if (clean.length < 15 || st.seen.has(clean)) continue;
@@ -276,15 +300,17 @@
       if (st.reviews.length >= COLLECT_MAX_REVIEWS) return finish("cap");
       if (st.roundsNoNew >= NO_NEW_ROUNDS_GIVEUP) return finish("no-more");
 
-      scanCommentsDOM(st); // 每轮先扫 DOM（含初始 SSR 直出的评价卡片）
+      scanCommentsDOM(st); // 每轮先扫当前已渲染卡片（seen 去重，滚动回收也不丢已收条目）
 
       var prev = st.reviews.length;
-      try { window.scrollTo(0, document.body.scrollHeight); } catch (e) { /* 忽略 */ }
-      // 评价列表是"容器内滚动条"形态（beautify-scroll-bar）：把每个评价容器内部也滚到底，触发懒加载
+      // 面板列表是容器内懒加载分批渲染：步进滚动逐批触发加载（跳底会跳过中间批次）
       try {
-        var cs = document.querySelectorAll(CARD_SELECTOR);
+        var cs = document.querySelectorAll(SCROLL_CONTAINER_SEL);
         for (var ci = 0; ci < cs.length; ci++) {
-          cs[ci].scrollTop = cs[ci].scrollHeight;
+          var c = cs[ci];
+          if (c.scrollHeight <= c.clientHeight) continue;               // 不可滚
+          if (c.scrollTop + c.clientHeight >= c.scrollHeight - 4) continue; // 已到底
+          c.scrollTop = c.scrollTop + Math.max(200, c.clientHeight * SCROLL_STEP_RATIO);
         }
       } catch (e) { /* 忽略 */ }
       setTimeout(function () {
