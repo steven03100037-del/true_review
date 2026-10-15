@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>V0.2 设计预览 · 真评报告（假数据）</title>
+<style>
+  /* ===== 基础变量（沿用 report.html 体系 + 淘宝橙主色）===== */
+  :root {
+    --green: #16a34a; --blue: #2563eb; --yellow: #ca8a04;
+    --orange: #ea580c; --red: #dc2626; --gray: #6b7280;
+    --line: #e5e7eb; --bg: #f4f5f7; --card: #ffffff; --ink: #1f2937;
+    --ai: #7c3aed; --ai-bg: #f5f3ff;
+    --gold: #d97706;
+    --tb: #ff5000; --tb-bg: #fff3ef; --tb-line: #ffd6c8;   /* 淘宝橙系：选中态/边框 */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-size: 16px; line-height: 1.6;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); }
+  /* ===== 品牌头部：渐变大字，去 emoji ===== */
+  .brand { display: flex; align-items: baseline; gap: 10px; margin: 14px 2px 2px; justify-content: center; }
+  .brand .logo { font-size: 38px; font-weight: 900; line-height: 1.15; letter-spacing: 1px;
+    background: linear-gradient(95deg, #1e293b 0%, #7c3aed 55%, #ff5000 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand .en { font-size: 13px; font-weight: 700; color: var(--gray); letter-spacing: 2px; }
+  .brand-sub { font-size: 13px; color: var(--gray); margin: 0 2px 14px; text-align: center; }
+  .brand-sub b { color: var(--tb); font-weight: 700; }
+  .mock-banner { font-size: 13px; color: var(--ai); background: var(--ai-bg); border: 1px dashed var(--ai);
+    border-radius: 8px; padding: 6px 10px; margin-bottom: 12px; }
+  .card { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .product { display: flex; gap: 12px; align-items: center; }
+  .product img { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; background: var(--line); flex: none; }
+  .product .t { font-size: 17px; font-weight: 700; line-height: 1.5; max-height: 4.5em; overflow: hidden; }
+  /* 评级卡已移除（V0.2 定稿：自评分数无根据，评论即答案） */
+
+  /* ===== AI 划重点卡 ===== */
+  .ai-card { background: var(--ai-bg); border: 1px solid #ddd6fe; }
+  .ai-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ai); font-size: 15px; margin-bottom: 8px; }
+  .ai-line { display: flex; gap: 8px; margin: 6px 0; font-size: 15px; align-items: baseline; }
+  .ai-line .k { flex: none; font-size: 13px; color: var(--gray); width: 52px; }
+  .ai-line .v { flex: 1; }
+  .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ai-chips .chip { background: #fff; border: 1px solid #ddd6fe; color: var(--ai); }
+  .ai-note { font-size: 12px; color: var(--gray); margin-top: 8px; }
+
+  /* ===== Tab 分段组（替代原生 button，去立体灰边）===== */
+  .seg { display: flex; background: #eceef3; border-radius: 10px; padding: 3px; margin: 4px 0 12px; }
+  .seg button { flex: 1; min-height: 38px; border: 0; appearance: none; -webkit-appearance: none;
+    background: transparent; color: var(--ink); font-size: 15px; font-family: inherit;
+    border-radius: 8px; cursor: pointer; transition: all .18s ease; padding: 0 8px; }
+  .seg button .n { font-size: 12px; opacity: .55; margin-left: 2px; }
+  .seg button.on { background: #fff; color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .seg button.on .n { color: var(--tb); opacity: 1; font-weight: 700; }
+
+  /* ===== 淘宝评价面板式筛选区（流式短语 chips）===== */
+  .panel-title { font-size: 19px; font-weight: 800; margin: 2px 0 10px; }
+  .panel-title .cnt { color: var(--gray); font-weight: 700; }
+  .chips-flow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fchip { border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 8px; padding: 7px 13px; font-size: 14px; font-family: inherit;
+    cursor: pointer; transition: all .15s ease; appearance: none; -webkit-appearance: none; }
+  .fchip .c { color: var(--gray); font-size: 13px; margin-left: 3px; }
+  .fchip:active { transform: scale(.96); }
+  .fchip.on { background: var(--tb-bg); border-color: var(--tb-line); color: var(--tb); font-weight: 600; }
+  .fchip.on .c { color: var(--tb); opacity: .8; }
+  .fchip.attr::before { content: ""; }  /* 属性筛（高价值/图/追评）与内容筛混排 */
+  /* 信任行 + 排序 */
+  .trust-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 8px; }
+  .trust { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--gold); font-weight: 600; }
+  .trust .badge { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .sortsel { border: 0; background: transparent; font-size: 14px; color: var(--ink); font-family: inherit;
+    cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 8px; }
+  .sortsel:active { background: #f3f4f6; }
+  .sortsel .ai-mark { color: var(--ai); font-weight: 700; }
+
+  /* ===== 评论卡 ===== */
+  .review { border-bottom: 1px solid var(--line); padding: 14px 0; }
+  .review:last-child { border-bottom: 0; }
+  .review .txt { margin-bottom: 6px; word-break: break-word; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f6f7f9; color: var(--gray); }
+  .chip.dim { background: #eff6ff; color: var(--blue); }
+  .chip.star { background: #fef3c7; color: var(--gold); font-weight: 700; }
+  .chip.llm { background: var(--ai-bg); color: var(--ai); border: 1px solid #ddd6fe; }
+  .sku-line { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .append { margin-top: 8px; padding: 8px 10px; background: #fafafa; border-left: 3px solid var(--green); border-radius: 0 8px 8px 0; }
+  .append .tag { font-size: 12px; color: var(--green); font-weight: 700; margin-right: 6px; }
+  .append .when { font-size: 12px; color: var(--gray); margin-right: 6px; }
+  .append .txt { margin: 2px 0 0; font-size: 15px; }
+  .imgs { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; -webkit-overflow-scrolling: touch; }
+  .imgs .ph { flex: none; width: 84px; height: 84px; border-radius: 10px; cursor: pointer;
+    background: linear-gradient(135deg, #e9ecf0, #f5f6f8); display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: var(--gray); transition: transform .15s ease; }
+  .imgs .ph:active { transform: scale(.95); }
+  .photo-only { display: flex; align-items: center; gap: 10px; color: var(--gray); font-size: 14px; }
+
+  .reason { color: var(--red); font-size: 14px; margin-top: 4px; }
+  table.meta { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.meta td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  table.meta td:last-child { text-align: right; color: var(--gray); }
+  .hint { font-size: 13px; color: var(--gray); margin: 8px 0; }
+  [hidden] { display: none !important; }
+
+  #toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: rgba(31,41,55,.92);
+    color: #fff; font-size: 14px; padding: 8px 16px; border-radius: 999px; transition: opacity .3s; opacity: 0; pointer-events: none; z-index: 9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="logo">真评</span><span class="en">ZHENPING</span></div>
+  <div class="brand-sub">为你过滤水军，只看<b>真实评价</b></div>
+  <div class="mock-banner">V0.2 设计预览 · 假数据 · 可点按交互（tab / 筛选 / 排序 / 图片）——定稿后由下游照此施工</div>
+
+  <!-- 商品卡 -->
+  <div class="card product">
+    <div style="width:80px;height:80px;border-radius:10px;background:linear-gradient(135deg,#e9ecf0,#f5f6f8);display:flex;align-items:center;justify-content:center;font-size:34px;flex:none">🛵</div>
+    <div class="t">小牛电动MT Citi锂电4824电动自行车新国标锂电池智能电瓶电自（示例商品标题）</div>
+  </div>
+
+  <!-- ✨AI 划重点卡（评级卡已砍，AI 卡上移补位） -->
+  <div class="card ai-card">
+    <div class="ai-head">✨ AI 划重点</div>
+    <div class="ai-line"><span class="k">👍 在夸</span>
+      <span class="v ai-chips"><span class="chip">电池续航很好</span><span class="chip">减震效果出色</span><span class="chip">做工扎实</span><span class="chip">外观时尚</span><span class="chip">客服热情</span></span>
+    </div>
+    <div class="ai-line"><span class="k">👎 在吐槽</span>
+      <span class="v" style="font-size:14px;color:var(--gray)">无明显集中吐槽；个别提到组装/提车等待久</span>
+    </div>
+    <div class="ai-line"><span class="k">💡 建议</span>
+      <span class="v">注重续航与日常通勤的用户可放心入手；多人反馈实际续航与厂家标称接近，限速内十几公里掉电约 10%。</span>
+    </div>
+    <div class="ai-note">⏱ 实际使用时：报告先秒开（本卡显示"AI 分析中…"），约 1 分钟后本卡与排序自动浮现</div>
+  </div>
+
+  <!-- Tab 分段组 -->
+  <div class="seg">
+    <button class="on" id="tab-btn-0" onclick="switchTab(0)">真实评论<span class="n">315</span></button>
+    <button id="tab-btn-1" onclick="switchTab(1)">疑似水军<span class="n">4</span></button>
+    <button id="tab-btn-2" onclick="switchTab(2)">数据</button>
+  </div>
+
+  <!-- 评价面板（淘宝式：面板标题 + 流式短语筛选 + 信任行/排序 + 列表） -->
+  <div id="panel-0">
+    <div class="card">
+      <div class="panel-title">用户评价 · <span class="cnt">315</span></div>
+      <div class="chips-flow" id="filter-row"></div>
+      <div class="trust-row">
+        <div class="trust"><span class="badge">✓</span>为你展示真实评价 · 共 319 条 · AI 已过滤 4 条水军</div>
+        <button class="sortsel" id="sort-btn" onclick="toggleSort()">✨ <span class="ai-mark">按价值</span>排序 ▾</button>
+      </div>
+    </div>
+    <div class="card" id="tab-0"></div>
+  </div>
+
+  <div class="card" id="tab-1" hidden></div>
+  <div class="card" id="tab-2" hidden></div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ===== 假数据（20 条，覆盖全部形态；images 为灰占位块，实际版本为 alicdn URL）=====
+const REVIEWS = [
+  { score:5, dims:["电池续航很好","减震效果出色"], text:"用了几天，续航里程跟厂家介绍的差不多，车辆避震、刹车都不错，很好很好！",
+    date:"2026-09-28", sku:"MT Citi 锂电 4824", tags:["带图"], images:3,
+    append:{ when:"30天后追评", text:"骑了一个月了，电池没有明显衰减，每天通勤12公里一周充一次，减震过减速带很稳。"} },
+  { score:5, dims:["电池续航很好","做工扎实"], text:"拿起来挺轻便的。减震效果：真的非常好 电池续航：我只开限速内，感觉还不错，十几公里只掉了10几的电 商品品质：品质很不错，越来越喜欢👍",
+    date:"2026-09-25", sku:"MT Citi 锂电 4824", tags:["带图"], images:2, append:null },
+  { score:4, dims:["外观时尚","性价比高"], text:"外观时尚，符合年轻人审美，续航挺远，日常通勤一个多星期充一次就行，减震效果不错。",
+    date:"2026-09-30", sku:"MT Citi 锂电 4824 智能版", tags:["带图","追评"], images:1,
+    append:{ when:"15天后追评", text:"刮风下雨也骑了，没有生锈，车况依旧。"} },
+  { score:4, dims:["服务态度很好"], text:"老板服务热情，技术好，推荐来梅李小牛店买小牛。同价位里特别出色，我觉得开着蛮好。",
+    date:"2026-10-02", sku:"MT Citi 锂电 4824", tags:["带图"], images:1, append:null },
+  { score:3, dims:["做工扎实"], text:"车子整体不错，车架焊接平整，坐垫舒服，就是提车等了三天。",
+    date:"2026-09-20", sku:"MT Citi 锂电 4824", tags:[], images:0, append:null },
+  { score:2, dims:["使用体验很棒"], text:"同价位里特别出色，我觉得开着蛮好",
+    date:"2026-10-05", sku:null, tags:["追评"], images:0, append:null },
+  { score:0, dims:[], text:"该用户未填写评价内容", photoOnly:true,
+    date:"2026-10-03", sku:"MT Citi 锂电 4824", tags:["带图"], images:4, append:null },
+  { score:4, dims:["电池续航很好"], text:"日常通勤一个多星期充一次就行，比我之前那台强多了，冬天续航还没到考验的时候。",
+    date:"2026-09-18", sku:"MT Citi 锂电 4824 智能版", tags:[], images:0, append:null },
+  { score:3, dims:["外观时尚"], text:"白色很干净，晚上尾灯挺亮，安全性加分。",
+    date:"2026-09-15", sku:null, tags:[], images:0, append:null },
+  { score:2, dims:[], text:"很好很满意，推荐！",
+    date:"2026-10-01", sku:null, tags:[], images:0, append:null },
+  { score:5, dims:["性价比高","电池续航很好"], text:"三千的价位对比了雅迪爱玛台铃，最后选小牛。续航实打实，仪表显示掉电和实际里程基本一致，App 查车况也方便。",
+    date:"2026-09-22", sku:"MT Citi 锂电 4824 智能版", tags:["带图"], images:2, append:null },
+  { score:4, dims:["减震效果出色"], text:"过减速带不颠，以前那台车过坑哐当响，这个滤震干净利落，市区路面质感好。",
+    date:"2026-09-26", sku:null, tags:[], images:0, append:null },
+  { score:4, dims:["做工扎实","外观时尚"], text:"车漆均匀没流挂，焊点平整，轮组正经品牌件，细节比想象中好。",
+    date:"2026-09-21", sku:"MT Citi 锂电 4824", tags:["带图"], images:1, append:null },
+  { score:3, dims:["服务态度很好"], text:"店员耐心讲解了上牌流程，还帮忙调了坐高，送了头盔和车锁。",
+    date:"2026-09-19", sku:null, tags:[], images:0, append:null },
+  { score:5, dims:["使用体验很棒","电池续航很好"], text:"骑车两周感受：起步顺、刹车线性、雨天刹车也没打滑；通勤加买菜一周一充，非常省心。",
+    date:"2026-09-24", sku:"MT Citi 锂电 4824 智能版", tags:["带图","追评"], images:3,
+    append:{ when:"45天后追评", text:"用了45天来追评：续航衰减不到5%，雨天也没出过毛病，这钱花得值。"} },
+  { score:2, dims:["外观时尚"], text:"颜值在线，停小区里回头率高。",
+    date:"2026-10-04", sku:null, tags:[], images:0, append:null },
+  { score:0, dims:[], text:"该用户未填写评价内容", photoOnly:true,
+    date:"2026-09-17", sku:"MT Citi 锂电 4824", tags:["带图"], images:2, append:null },
+  { score:3, dims:["性价比高"], text:"这个配置这个价，性价比可以了，就是坐桶空间一般，头盔塞着费劲。",
+    date:"2026-09-16", sku:null, tags:[], images:0, append:null },
+  { score:4, dims:["减震效果出色","使用体验很棒"], text:"家里老人也说骑着稳，速度不快但很扎实，买菜接娃都够用。",
+    date:"2026-09-23", sku:"MT Citi 锂电 4824", tags:[], images:0, append:null },
+  { score:2, dims:[], text:"还不错，可以。",
+    date:"2026-10-06", sku:null, tags:["追评"], images:0,
+    append:{ when:"7天后追评", text:"还是不错。"} },
+];
+const SUSPICIOUS = [
+  { text:"非常好非常好非常好大家快来买", date:"2026-09-26",
+    reasons:["好评词典+超短文本","3条评论高度雷同"], llm:"确认：模板化好评，无真实使用信息" },
+  { text:"客服小丽服务态度超级好，店铺值得信赖", date:"2026-09-12",
+    reasons:["公共模板短语命中"], llm:"确认：典型商家引导话术" },
+];
+const DIM_ORDER = ["电池续航很好","减震效果出色","做工扎实","性价比高","外观时尚","服务态度很好","使用体验很棒"];
+
+// ===== 筛选（属性筛 + 内容筛，淘宝式流式）=====
+let curFilter = { key: "all", dim: null };
+let sortBy = "value";   // value=AI 价值 | newest=最新
+function stat(list, fn) { return list.filter(fn).length; }
+function buildFilter() {
+  const c = {
+    all: REVIEWS.length,
+    star: stat(REVIEWS, r => r.score >= 4),
+    photo: stat(REVIEWS, r => (r.images||0) > 0),
+    append: stat(REVIEWS, r => !!r.append || (r.tags||[]).includes("追评")),
+  };
+  const dims = {};
+  REVIEWS.forEach(r => (r.dims||[]).forEach(d => dims[d] = (dims[d]||0)+1));
+  let h =
+    chipHtml("all", "全部", c.all) +
+    chipHtml("star", "⭐ 高价值", c.star) +
+    chipHtml("photo", "图/视频", c.photo) +
+    chipHtml("append", "追评", c.append);
+  DIM_ORDER.forEach(d => { if (dims[d]) h += chipHtmlDim(d, dims[d]); });
+  document.getElementById("filter-row").innerHTML = h;
+}
+function chipHtml(key, label, n) {
+  const on = curFilter.key === key && !curFilter.dim ? " on" : "";
+  return '<button class="fchip'+on+'" onclick="setKey(\''+key+'\')">'+label+'<span class="c">'+n+'</span></button>';
+}
+function chipHtmlDim(d, n) {
+  const on = curFilter.dim === d ? " on" : "";
+  return '<button class="fchip'+on+'" onclick="setDim(\''+d+'\')">'+d+'<span class="c">'+n+'</span></button>';
+}
+function setKey(k) { curFilter = { key: (curFilter.key===k && !curFilter.dim) ? "all" : k, dim: null }; buildFilter(); renderList(); }
+function setDim(d) { curFilter = curFilter.dim===d ? { key:"all", dim:null } : { key:"all", dim:d }; buildFilter(); renderList(); }
+function toggleSort() {
+  sortBy = sortBy === "value" ? "newest" : "value";
+  document.getElementById("sort-btn").innerHTML = sortBy === "value"
+    ? '✨ <span class="ai-mark">按价值</span>排序 ▾' : '按<span class="ai-mark">最新</span>排序 ▾';
+  renderList();
+}
+
+// ===== 列表渲染 =====
+function visibleList() {
+  let list = REVIEWS.slice();
+  if (curFilter.key === "star") list = list.filter(r => r.score >= 4);
+  if (curFilter.key === "photo") list = list.filter(r => (r.images||0) > 0);
+  if (curFilter.key === "append") list = list.filter(r => !!r.append || (r.tags||[]).includes("追评"));
+  if (curFilter.dim) list = list.filter(r => (r.dims||[]).includes(curFilter.dim));
+  if (sortBy === "value") list.sort((a,b) => (b.score||0)-(a.score||0));
+  else list.sort((a,b) => (b.date||"").localeCompare(a.date||""));
+  return list;
+}
+function renderList() {
+  const list = visibleList();
+  const html = list.map(r => {
+    if (r.photoOnly) {
+      return '<div class="review"><div class="photo-only">📷 无文字 · 仅图（'+r.images+'张）</div>' +
+        '<div class="imgs">' + ph(r.images) + '</div>' +
+        '<div class="chips" style="margin-top:8px">' + chipsOf(r) + '</div></div>';
+    }
+    let h = '<div class="review"><div class="txt">' + esc(r.text) + '</div>';
+    if (r.append) {
+      h += '<div class="append"><span class="tag">追评</span><span class="when">'+r.append.when+'</span>' +
+           '<div class="txt">'+esc(r.append.text)+'</div></div>';
+    }
+    if (r.images) { h += '<div class="imgs" onclick="toast(\'实际版本：新标签页打开原图\')">' + ph(r.images) + '</div>'; }
+    h += '<div class="chips" style="margin-top:8px">' + chipsOf(r) + '</div>';
+    if (r.sku) { h += '<div class="sku-line">已购：' + esc(r.sku) + '</div>'; }
+    return h + '</div>';
+  }).join("");
+  document.getElementById("tab-0").innerHTML = html || '<div class="hint">该筛选条件下暂无评论</div>';
+}
+function ph(n) { let s=""; for (let i=0;i<n;i++) s+='<div class="ph">🖼</div>'; return s; }
+function chipsOf(r) {
+  let c = [];
+  if (r.score >= 4) c.push('<span class="chip star">⭐ 高价值</span>');
+  (r.dims||[]).forEach(d => c.push('<span class="chip dim">'+d+'</span>'));
+  (r.tags||[]).forEach(t => c.push('<span class="chip">'+t+'</span>'));
+  c.push('<span class="chip date">'+(r.date||"")+'</span>');
+  return c.join("");
+}
+
+// ===== 疑似水军 / 数据 tab =====
+document.getElementById("tab-1").innerHTML = SUSPICIOUS.map(r =>
+  '<div class="review"><div class="txt">' + esc(r.text) + '</div>' +
+  '<div class="reason">⚠ ' + r.reasons.map(esc).join("；") + '</div>' +
+  '<div style="margin-top:4px"><span class="chip llm">✨ ' + esc(r.llm) + '</span></div>' +
+  '<div class="chips" style="margin-top:6px"><span class="chip date">'+r.date+'</span></div></div>'
+).join("");
+
+document.getElementById("tab-2").innerHTML =
+  '<table class="meta">' +
+  '<tr><td>来源</td><td>浏览器扩展</td></tr>' +
+  '<tr><td>评价总数（面板标称）</td><td>1024</td></tr>' +
+  '<tr><td>抓取评论数</td><td>317</td></tr>' +
+  '<tr><td>有效评论数（清洗后）</td><td>319</td></tr>' +
+  '<tr><td>真实 / 可疑 / 边界</td><td>315 / 4 / 0（✨ AI 终审后）</td></tr>' +
+  '<tr><td>AI 增值</td><td>✨ 已完成（deepseek-chat · 58 秒）</td></tr>' +
+  '<tr><td>分析耗时</td><td>153 秒</td></tr>' +
+  '</table>' +
+  '<div class="hint">抓取 317 / 总数 1024：面板懒加载与采集上限所致，样本已覆盖近期主流评价。</div>';
+
+function switchTab(i) {
+  document.getElementById("panel-0").hidden = (i !== 0);
+  document.getElementById("tab-1").hidden = (i !== 1);
+  document.getElementById("tab-2").hidden = (i !== 2);
+  for (let k = 0; k < 3; k++) document.getElementById("tab-btn-"+k).classList.toggle("on", k === i);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.opacity = 0, 1800);
+}
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+buildFilter();
+renderList();
+</script>
+</body>
+</html>
