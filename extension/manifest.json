@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "description": "在天猫/淘宝商品页内旁听评价接口，交给本地「真评」服务生成真实评论报告。",
   "permissions": ["scripting", "tabs"],
-  "host_permissions": ["http://127.0.0.1:8000/*"],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "https://detail.tmall.com/*",
+    "https://item.taobao.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "真评"
