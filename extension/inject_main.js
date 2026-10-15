@@ -215,15 +215,20 @@
     return clickTabByText(RATE_TAB_TEXTS);
   }
 
-  // 打开"查看全部评论"完整面板（文本包含匹配，按钮文案可能带数量）
+  // 打开"查看全部评论/评价"面板。页面上外层容器与真按钮都含该文本（V0.1.2 诊断③：
+  // footer-- 与 ShowButton--），按文档序点第一个会点到无处理器的容器——
+  // 收集全部匹配，点 textContent 最短者（最内层真按钮）。
   function clickSeeAllComments() {
     var nodes = document.querySelectorAll('a,button,div,span,li,[role="button"]');
+    var best = null, bestLen = 0;
     for (var i = 0; i < nodes.length; i++) {
       var t = (nodes[i].textContent || "").trim();
-      if (/查看全部评[论价]/.test(t) && t.length < 24) { // 文案随商品/类目变："评论"或"评价"（V0.1.5 实证两种都有）
-        try { nodes[i].click(); } catch (e) { /* 忽略 */ }
-        return true;
+      if (/查看全部评[论价]/.test(t) && t.length < 24) {
+        if (!best || t.length < bestLen) { best = nodes[i]; bestLen = t.length; }
       }
+    }
+    if (best) {
+      try { best.click(); return true; } catch (e) { /* 忽略 */ }
     }
     return false;
   }
@@ -306,6 +311,7 @@
 
       var prev = st.reviews.length; // 判定基准取在扫描前：本轮扫到的滚动新增才计入"有新"，否则 3 轮即误判 no-more
       scanCommentsDOM(st); // 每轮先扫当前已渲染卡片（seen 去重，滚动回收也不丢已收条目）
+      var moved = false; // 本轮是否有容器实际向前滚了（还有加载空间）
       // 面板列表是容器内懒加载分批渲染：步进滚动逐批触发加载（跳底会跳过中间批次）
       try {
         var cs = document.querySelectorAll(SCROLL_CONTAINER_SEL);
@@ -314,11 +320,13 @@
           if (c.scrollHeight <= c.clientHeight) continue;               // 不可滚
           if (c.scrollTop + c.clientHeight >= c.scrollHeight - 4) continue; // 已到底
           c.scrollTop = c.scrollTop + Math.max(200, c.clientHeight * SCROLL_STEP_RATIO);
+          moved = true;
         }
       } catch (e) { /* 忽略 */ }
       setTimeout(function () {
         if (!st.running) return;
-        st.roundsNoNew = st.reviews.length > prev ? 0 : st.roundsNoNew + 1;
+        // 放弃语义（V0.1.6）：只有"全部滚到底"后连续 6 轮无新才算滚完；还能滚就不计无新（240s 超时兜底）
+        st.roundsNoNew = (st.reviews.length > prev || moved) ? 0 : st.roundsNoNew + 1;
         var wait = SCROLL_WAIT_MIN_MS + Math.random() * (SCROLL_WAIT_MAX_MS - SCROLL_WAIT_MIN_MS);
         setTimeout(tick, wait);
       }, 600); // 给懒加载响应留出到达时间，再判定本轮是否有新
@@ -339,7 +347,8 @@
         st.startAt = Date.now(); // 计时从就绪起算，等待期不占用 240s 预算
         setTimeout(tick, 400);
       } else if (tries > 0) {
-        setTimeout(function () { waitForPanel(tries - 1); }, 500); // 每 0.5s 复查，最多 15s
+        if (tries % 6 === 0) { clickSeeAllComments(); } // 等待期每 ~3s 补点一次，覆盖按钮晚渲染
+        setTimeout(function () { waitForPanel(tries - 1); }, 500);
       } else {
         setTimeout(tick, 200); // 等不到（无面板场景）也开跑，走预览区/启发式原有流程
       }
