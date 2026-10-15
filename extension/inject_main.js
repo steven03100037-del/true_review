@@ -285,12 +285,14 @@
     };
     window.__ZHENPING_STATE__ = st;
     post("START", {});
-    // 强制重拉评价数据：先点走当前 tab 再点回评价（当前已在评价 tab 时重复点击不会重新请求）
-    var switchedAway = clickTabByText(["图文详情", "商品详情", "参数信息"]);
-    if (switchedAway) {
-      setTimeout(function () { clickRateTab(); }, 600);
-    } else {
-      clickRateTab();
+    // 优先自动打开"查看全部评论"完整面板（全量数据入口）；打不开再退回 tab 切换触发预览区加载
+    if (!clickSeeAllComments()) {
+      var switchedAway = clickTabByText(["图文详情", "商品详情", "参数信息"]);
+      if (switchedAway) {
+        setTimeout(function () { clickRateTab(); }, 600);
+      } else {
+        clickRateTab();
+      }
     }
 
     var tick = function () {
@@ -300,9 +302,8 @@
       if (st.reviews.length >= COLLECT_MAX_REVIEWS) return finish("cap");
       if (st.roundsNoNew >= NO_NEW_ROUNDS_GIVEUP) return finish("no-more");
 
+      var prev = st.reviews.length; // 判定基准取在扫描前：本轮扫到的滚动新增才计入"有新"，否则 3 轮即误判 no-more
       scanCommentsDOM(st); // 每轮先扫当前已渲染卡片（seen 去重，滚动回收也不丢已收条目）
-
-      var prev = st.reviews.length;
       // 面板列表是容器内懒加载分批渲染：步进滚动逐批触发加载（跳底会跳过中间批次）
       try {
         var cs = document.querySelectorAll(SCROLL_CONTAINER_SEL);
