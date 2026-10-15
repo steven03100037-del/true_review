@@ -106,8 +106,8 @@
     try { chrome.runtime.sendMessage({ type: "STATUS", text: text }); } catch (e) { /* popup 可能已关闭 */ }
   }
 
-  // 页面打开即常驻装好 hook（不等用户点击）：评价数据若在初始加载时就拉取，也能被旁听到。
-  // inject_main 二次注入会走 __ZHENPING_HOOKED__ 分支，只重开一轮收集，hook 不重复安装。
+  // 页面打开即常驻装好 hook（只装 hook 不收集，V0.1.4）：评价数据若在初始加载时拉取也能被旁听到。
+  // 收集流程仅由用户点击扩展触发；inject_main 首次注入不再自动 startCollection。
   function armHookEarly() {
     chrome.runtime.sendMessage({ type: "INJECT_MAIN" }, function (resp) {
       if (chrome.runtime.lastError || !resp || !resp.ok) {

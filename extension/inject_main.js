@@ -49,7 +49,8 @@
   }
   window.__ZHENPING_HOOKED__ = true;
   installHooks();
-  startCollection();
+  // V0.1.4：页面加载只装 hook 旁听，不自动收集——收集仅由用户点扩展触发
+  //（content.js START_ANALYSIS → 二次注入 → 走上方 __ZHENPING_HOOKED__ 分支进 startCollection）。
 
   function post(type, extra) {
     var msg = { source: POST_SOURCE, type: type };
