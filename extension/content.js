@@ -52,11 +52,33 @@
       status("已收集 " + collected.size + " 条…");
     } else if (m.type === "END") {
       running = false;
-      // DOM 扫描通道（m.reviews）为主，hook 通道（collected）数据并入去重
+      // DOM 扫描通道（m.reviews）为主，hook 通道（collected）数据并入去重；
+      // 同文本双通道字段合并（V0.2-B）：images 并集去重 / append_text 取更长 /
+      // sku 非空优先 / tags 并集 / date·star 缺省补齐
       var merged = {};
       var order = [];
       var addOne = function (r) {
-        if (r && r.text && !merged[r.text]) { merged[r.text] = r; order.push(r); }
+        if (!r || !r.text) return;
+        var ex = merged[r.text];
+        if (!ex) {
+          var copy = {};
+          for (var k in r) copy[k] = r[k];
+          merged[r.text] = copy;
+          order.push(copy);
+          return;
+        }
+        var seenImg = {}, i, u;
+        (ex.images || []).forEach(function (x) { seenImg[x] = 1; });
+        (r.images || []).forEach(function (x) {
+          if (!seenImg[x]) { seenImg[x] = 1; (ex.images || (ex.images = [])).push(x); }
+        });
+        (r.tags || []).forEach(function (t) {
+          if ((ex.tags || (ex.tags = [])).indexOf(t) === -1) ex.tags.push(t);
+        });
+        if ((r.append_text || "").length > (ex.append_text || "").length) ex.append_text = r.append_text;
+        if (!ex.sku && r.sku) ex.sku = r.sku;
+        if (!ex.date && r.date) ex.date = r.date;
+        if (ex.star == null && r.star != null) ex.star = r.star;
       };
       (m.reviews || []).forEach(addOne);
       collected.forEach(addOne);
@@ -76,6 +98,7 @@
           product: grabProduct(),
           page_url: location.href,
           reviews: order,
+          meta: { total_declared: (m.meta && m.meta.total_declared != null) ? m.meta.total_declared : null },
         },
       }, function (resp) {
         if (chrome.runtime.lastError) {

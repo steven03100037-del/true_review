@@ -12,9 +12,15 @@
   // 单条评论的字段（同义键依次尝试）
   var CONTENT_KEYS = ["content", "rateContent"];
   var DATE_KEYS = ["date", "rateDate", "created"];
-  var IMAGES_KEYS = ["images", "pics", "photos"];       // 非空 → tags 加"带图"
+  var IMAGES_KEYS = ["images", "pics", "photos"];       // 非空 → tags 加"带图"；数组原样保留（V0.2-B images）
   var APPEND_KEYS = ["append", "appendComment", "isAppend"]; // 真 → tags 加"追评"
+  var APPEND_OBJ_KEYS = ["appendFeedback", "append", "appendContent"]; // 追评对象键（V0.2-B append_text）
+  var APPEND_TEXT_KEYS = ["content", "rateContent"];   // 追评对象内的正文字段
   var STAR_KEYS = ["star", "rateStar", "score"];
+
+  // 2026-10-15 快照/诊断补充常量（V0.1.5/V0.2-B）：
+  var SKU_RE = /已购[:：]\s*(.+?)\s*(?:$|\n|·)/;        // meta-- 里的已购 SKU
+  var TOTAL_DECLARED_RE = /用户评价\s*[·•・]\s*([\d,]+)\+?/; // 面板标题"用户评价 · 400+"（报告级总数）
 
   // 评价 tab 按钮文本（存在才点，用于触发评价模块加载）
   var RATE_TAB_TEXTS = ["用户评价", "全部评价", "累计评价"];
@@ -123,12 +129,36 @@
     return null;
   }
 
+  function normalizeImageUrl(src) {
+    if (!src) return null;
+    src = String(src).trim();
+    if (src.indexOf("//") === 0) src = "https:" + src; // 协议相对地址补 https
+    if (!/^https?:\/\//.test(src)) return null;
+    return src;
+  }
+
+  function extractAppend(item) {
+    // 追评分离（V0.2-B）：hook 通道取 appendFeedback/append/appendContent 的内文字段；找不到留空
+    for (var i = 0; i < APPEND_OBJ_KEYS.length; i++) {
+      var v = item[APPEND_OBJ_KEYS[i]];
+      if (!v) continue;
+      if (typeof v === "string") return v;
+      if (typeof v === "object") {
+        var t = firstKey(v, APPEND_TEXT_KEYS);
+        if (t) return String(t);
+      }
+    }
+    return null;
+  }
+
   function extractItem(item) {
     var text = firstKey(item, CONTENT_KEYS);
     if (!text || !String(text).trim()) return null;
+    var images = firstKey(item, IMAGES_KEYS);
+    var appendText = extractAppend(item);
     var tags = [];
-    if (firstKey(item, IMAGES_KEYS)) tags.push("带图");
-    if (firstKey(item, APPEND_KEYS)) tags.push("追评");
+    if (images && images.length) tags.push("带图");
+    if (firstKey(item, APPEND_KEYS) || appendText) tags.push("追评");
     var star = firstKey(item, STAR_KEYS);
     star = star === null ? null : Number(star);
     if (star === null || !isFinite(star)) star = null;
@@ -137,6 +167,10 @@
       date: firstKey(item, DATE_KEYS) || null,
       tags: tags,
       star: star,
+      images: (Array.isArray(images) ? images : [])
+        .map(normalizeImageUrl).filter(function (u) { return u; }),
+      append_text: appendText,
+      sku: null,
     };
   }
 
@@ -241,6 +275,31 @@
 
   var DATE_RE = /(\d{4}-\d{2}-\d{2})|(\d{4}年\d{1,2}月\d{1,2}日)/; // 兼容 2026-09-23 与 2026年9月23日
 
+  function collectCardImages(card) {
+    // 评论配图（V0.2-B）：优先 album-- 相册容器内全部 img（src||data-src 懒加载兼容）；
+    // 无 album-- 降级为整卡内 class 含 pic/img 的缩略图集合；再找不到就空数组（不出卡，避免误收商品主图）
+    var out = [], seen = {};
+    function push(src) {
+      var u = normalizeImageUrl(src);
+      if (u && !seen[u]) { seen[u] = 1; out.push(u); }
+    }
+    var album = null;
+    try { album = card.querySelector(ALBUM_SEL); } catch (e) { /* 忽略 */ }
+    if (album) {
+      var imgs = album.querySelectorAll("img");
+      for (var i = 0; i < imgs.length; i++) {
+        push(imgs[i].getAttribute("src") || imgs[i].getAttribute("data-src"));
+      }
+      if (out.length) return out;
+    }
+    var cand = [];
+    try { cand = card.querySelectorAll('[class*="pic"] img, [class*="img"] img'); } catch (e) { /* 忽略 */ }
+    for (var j = 0; j < cand.length; j++) {
+      push(cand[j].getAttribute("src") || cand[j].getAttribute("data-src"));
+    }
+    return out;
+  }
+
   function scanCommentsDOM(st) {
     var cards = document.querySelectorAll(CARD_SELECTOR);
     if (!cards.length) { scanCommentsHeuristic(st); return; } // 页面改版断选择器时退回启发式，不至于全灭
@@ -254,11 +313,16 @@
       if (metaEl) metaText = metaEl.textContent || "";
       var dm = metaText.match(DATE_RE);
       if (!dm) { dm = (el.textContent || "").match(DATE_RE); } // 部分商品卡片日期不在 meta-- 里（V0.1.5 实证），整卡兜底
+      var sm = metaText.match(SKU_RE); // 已购 SKU（V0.2-B）
       var tags = [];
-      try { if (el.querySelector(ALBUM_SEL)) tags.push("带图"); } catch (e) { /* 忽略 */ }
+      var images = collectCardImages(el);
+      try { if (el.querySelector(ALBUM_SEL) || images.length) tags.push("带图"); } catch (e) { /* 忽略 */ }
       if (/追评/.test(el.textContent || "")) tags.push("追评");
       st.seen.add(clean);
-      st.reviews.push({ text: clean, date: dm ? dm[0] : null, tags: tags, star: null });
+      // 追评 DOM 选择器待真实页实证（V0.2-B §1.2），实证前 append_text 留空不混入初评
+      st.reviews.push({ text: clean, date: dm ? dm[0] : null, tags: tags, star: null,
+                        images: images, append_text: null,
+                        sku: sm ? sm[1].trim() : null });
     }
   }
 
@@ -282,8 +346,18 @@
       try { if (el.querySelector("img")) tags.push("带图"); } catch (e) { /* 忽略 */ }
       if (t.indexOf("追评") !== -1) tags.push("追评");
       st.seen.add(clean);
-      st.reviews.push({ text: clean, date: null, tags: tags, star: null });
+      st.reviews.push({ text: clean, date: null, tags: tags, star: null,
+                        images: collectCardImages(el), append_text: null, sku: null });
     }
+  }
+
+  function findTotalDeclared() {
+    // 评价总数（面板标称，V0.2-B）：形如"用户评价 · 400+"；找不到为 null
+    try {
+      var m = (document.body.textContent || "").match(TOTAL_DECLARED_RE);
+      if (m) return parseInt(m[1].replace(/,/g, ""), 10);
+    } catch (e) { /* 忽略 */ }
+    return null;
   }
 
   function startCollection() {
@@ -293,6 +367,7 @@
       roundsNoNew: 0,
       startAt: Date.now(),
       running: true,
+      total_declared: findTotalDeclared(),
     };
     window.__ZHENPING_STATE__ = st;
     post("START", {});
@@ -363,7 +438,11 @@
   function finish(reason) {
     var st = window.__ZHENPING_STATE__;
     if (st) st.running = false;
+    // 评价总数收工时再扫一次（面板标题可能晚渲染），启动时扫到的作兜底
+    var td = findTotalDeclared();
+    if (td == null && st && st.total_declared != null) td = st.total_declared;
     post("END", { reason: reason, total: st ? st.reviews.length : 0,
-                  reviews: st ? st.reviews : [] });
+                  reviews: st ? st.reviews : [],
+                  meta: { total_declared: td } });
   }
 })();
