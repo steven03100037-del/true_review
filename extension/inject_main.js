@@ -215,16 +215,20 @@
     return clickTabByText(RATE_TAB_TEXTS);
   }
 
-  // 打开"查看全部评论/评价"面板。页面上外层容器与真按钮都含该文本（V0.1.2 诊断③：
-  // footer-- 与 ShowButton--），按文档序点第一个会点到无处理器的容器——
-  // 收集全部匹配，点 textContent 最短者（最内层真按钮）。
+  // 打开"查看全部评论/评价"面板。页面上外层容器与真按钮都含该文本且文本可能恰好同长
+  // （V0.1.7 实证：footer-- 与 ShowButton-- 都是 6 字），判据=文本最短优先、平局选 DOM 更深者
+  //（真按钮是容器的后代，深度必然更大）。V0.1.7 实证对真按钮 el.click() 有效，无 isTrusted 过滤。
   function clickSeeAllComments() {
     var nodes = document.querySelectorAll('a,button,div,span,li,[role="button"]');
-    var best = null, bestLen = 0;
+    function depth(el) { var d = 0; while (el && el !== document.documentElement) { d++; el = el.parentNode; } return d; }
+    var best = null, bestLen = 0, bestDepth = 0;
     for (var i = 0; i < nodes.length; i++) {
       var t = (nodes[i].textContent || "").trim();
       if (/查看全部评[论价]/.test(t) && t.length < 24) {
-        if (!best || t.length < bestLen) { best = nodes[i]; bestLen = t.length; }
+        var d = depth(nodes[i]);
+        if (!best || t.length < bestLen || (t.length === bestLen && d > bestDepth)) {
+          best = nodes[i]; bestLen = t.length; bestDepth = d;
+        }
       }
     }
     if (best) {
