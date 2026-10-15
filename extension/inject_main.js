@@ -220,7 +220,7 @@
     var nodes = document.querySelectorAll('a,button,div,span,li,[role="button"]');
     for (var i = 0; i < nodes.length; i++) {
       var t = (nodes[i].textContent || "").trim();
-      if (t.indexOf("查看全部评论") !== -1 && t.length < 24) {
+      if (/查看全部评[论价]/.test(t) && t.length < 24) { // 文案随商品/类目变："评论"或"评价"（V0.1.5 实证两种都有）
         try { nodes[i].click(); } catch (e) { /* 忽略 */ }
         return true;
       }
@@ -244,6 +244,7 @@
       var metaEl = el.querySelector(META_SEL);
       if (metaEl) metaText = metaEl.textContent || "";
       var dm = metaText.match(DATE_RE);
+      if (!dm) { dm = (el.textContent || "").match(DATE_RE); } // 部分商品卡片日期不在 meta-- 里（V0.1.5 实证），整卡兜底
       var tags = [];
       try { if (el.querySelector(ALBUM_SEL)) tags.push("带图"); } catch (e) { /* 忽略 */ }
       if (/追评/.test(el.textContent || "")) tags.push("追评");
