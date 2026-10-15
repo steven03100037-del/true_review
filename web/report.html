@@ -3,13 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="format-detection" content="telephone=no">
+<meta name="referrer" content="no-referrer">
 <title>真评 · 真实评论报告</title>
 <style>
+  /* ===== 视觉与渲染规格 = web/mockups/v0.2_report_preview.html（V0.2-A 定稿移植，
+     差异仅三处：数据源 /api/report/<id>、AI 卡三态+轮询、无 mock-banner）===== */
   :root {
     --green: #16a34a; --blue: #2563eb; --yellow: #ca8a04;
     --orange: #ea580c; --red: #dc2626; --gray: #6b7280;
     --line: #e5e7eb; --bg: #f4f5f7; --card: #ffffff; --ink: #1f2937;
+    --ai: #7c3aed; --ai-bg: #f5f3ff;
+    --gold: #d97706;
+    --tb: #ff5000; --tb-bg: #fff3ef; --tb-line: #ffd6c8;
   }
   * { box-sizing: border-box; }
   body {
@@ -18,32 +23,77 @@
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   .wrap { max-width: 640px; margin: 0 auto; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); }
-  h1 { font-size: 22px; margin: 8px 0 14px; }
+  .brand { display: flex; align-items: baseline; gap: 10px; margin: 14px 2px 2px; justify-content: center; }
+  .brand .logo { font-size: 38px; font-weight: 900; line-height: 1.15; letter-spacing: 1px;
+    background: linear-gradient(95deg, #1e293b 0%, #7c3aed 55%, #ff5000 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand .en { font-size: 13px; font-weight: 700; color: var(--gray); letter-spacing: 2px; }
+  .brand-sub { font-size: 13px; color: var(--gray); margin: 0 2px 14px; text-align: center; }
+  .brand-sub b { color: var(--tb); font-weight: 700; }
   .card { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   .product { display: flex; gap: 12px; align-items: center; }
-  .product img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--line); flex: none; }
-  .product .t { font-size: 16px; font-weight: 600; max-height: 4.2em; overflow: hidden; }
-  .grade-row { display: flex; align-items: center; gap: 16px; }
-  .grade-letter { font-size: 64px; font-weight: 800; line-height: 1; width: 88px; text-align: center; }
-  .grade-meta { flex: 1; }
-  .rating-line { font-size: 16px; margin-bottom: 6px; }
-  .rating-line .adj { font-size: 28px; font-weight: 800; color: var(--ink); }
-  .rating-line .old { color: var(--gray); text-decoration: line-through; }
-  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin-top: 10px; }
-  .bar > div { height: 100%; }
-  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--gray); margin-top: 6px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
-  .tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
-  .tabs button { min-height: 44px; margin: 0; background: #e8eaf0; color: var(--ink); font-size: 15px; padding: 0 8px; }
-  .tabs button.on { background: var(--blue); color: #fff; }
-  .review { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .product img { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; background: var(--line); flex: none; }
+  .product .t { font-size: 17px; font-weight: 700; line-height: 1.5; max-height: 4.5em; overflow: hidden; }
+
+  /* ===== AI 划重点卡 ===== */
+  .ai-card { background: var(--ai-bg); border: 1px solid #ddd6fe; }
+  .ai-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ai); font-size: 15px; margin-bottom: 8px; }
+  .ai-line { display: flex; gap: 8px; margin: 6px 0; font-size: 15px; align-items: baseline; }
+  .ai-line .k { flex: none; font-size: 13px; color: var(--gray); width: 52px; }
+  .ai-line .v { flex: 1; }
+  .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ai-chips .chip { background: #fff; border: 1px solid #ddd6fe; color: var(--ai); }
+  .ai-note { font-size: 12px; color: var(--gray); margin-top: 8px; }
+  .ai-status { font-size: 15px; color: var(--ai); }
+
+  /* ===== Tab 分段组 ===== */
+  .seg { display: flex; background: #eceef3; border-radius: 10px; padding: 3px; margin: 4px 0 12px; }
+  .seg button { flex: 1; min-height: 38px; border: 0; appearance: none; -webkit-appearance: none;
+    background: transparent; color: var(--ink); font-size: 15px; font-family: inherit;
+    border-radius: 8px; cursor: pointer; transition: all .18s ease; padding: 0 8px; }
+  .seg button .n { font-size: 12px; opacity: .55; margin-left: 2px; }
+  .seg button.on { background: #fff; color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .seg button.on .n { color: var(--tb); opacity: 1; font-weight: 700; }
+
+  /* ===== 淘宝评价面板式筛选区 ===== */
+  .panel-title { font-size: 19px; font-weight: 800; margin: 2px 0 10px; }
+  .panel-title .cnt { color: var(--gray); font-weight: 700; }
+  .chips-flow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fchip { border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 8px; padding: 7px 13px; font-size: 14px; font-family: inherit;
+    cursor: pointer; transition: all .15s ease; appearance: none; -webkit-appearance: none; }
+  .fchip .c { color: var(--gray); font-size: 13px; margin-left: 3px; }
+  .fchip:active { transform: scale(.96); }
+  .fchip.on { background: var(--tb-bg); border-color: var(--tb-line); color: var(--tb); font-weight: 600; }
+  .fchip.on .c { color: var(--tb); opacity: .8; }
+  .trust-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 8px; flex-wrap: wrap; }
+  .trust { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--gold); font-weight: 600; }
+  .trust .badge { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .sortsel { border: 0; background: transparent; font-size: 14px; color: var(--ink); font-family: inherit;
+    cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 8px; }
+  .sortsel:active { background: #f3f4f6; }
+  .sortsel .ai-mark { color: var(--ai); font-weight: 700; }
+
+  /* ===== 评论卡 ===== */
+  .review { border-bottom: 1px solid var(--line); padding: 14px 0; }
   .review:last-child { border-bottom: 0; }
   .review .txt { margin-bottom: 6px; word-break: break-word; }
-  .review.dim .txt { color: var(--gray); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--green); }
-  .chip.gray { background: #f3f4f6; color: var(--gray); }
-  .chip.date { background: #f3f4f6; color: var(--gray); }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f6f7f9; color: var(--gray); }
+  .chip.dim { background: #eff6ff; color: var(--blue); }
+  .chip.star { background: #fef3c7; color: var(--gold); font-weight: 700; }
+  .chip.llm { background: var(--ai-bg); color: var(--ai); border: 1px solid #ddd6fe; }
+  .sku-line { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .append { margin-top: 8px; padding: 8px 10px; background: #fafafa; border-left: 3px solid var(--green); border-radius: 0 8px 8px 0; }
+  .append .tag { font-size: 12px; color: var(--green); font-weight: 700; margin-right: 6px; }
+  .append .txt { margin: 2px 0 0; font-size: 15px; }
+  .imgs { display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; -webkit-overflow-scrolling: touch; }
+  .imgs .ph { flex: none; width: 84px; height: 84px; border-radius: 10px; cursor: pointer;
+    background: linear-gradient(135deg, #e9ecf0, #f5f6f8); overflow: hidden; display: block; }
+  .imgs .ph img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; display: block; }
+
   .reason { color: var(--red); font-size: 14px; margin-top: 4px; }
   table.meta { width: 100%; border-collapse: collapse; font-size: 15px; }
   table.meta td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
@@ -51,11 +101,16 @@
   .hint { font-size: 13px; color: var(--gray); margin: 8px 0; }
   #errbox { padding: 10px 12px; border-radius: 10px; background: #fef2f2; color: var(--red); font-size: 15px; margin-bottom: 12px; }
   [hidden] { display: none !important; }
+
+  #toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: rgba(31,41,55,.92);
+    color: #fff; font-size: 14px; padding: 8px 16px; border-radius: 999px; transition: opacity .3s; opacity: 0; pointer-events: none; z-index: 9; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🔍 真评 · 报告</h1>
+  <div class="brand"><span class="logo">真评</span><span class="en">ZHENPING</span></div>
+  <div class="brand-sub">为你过滤水军，只看<b>真实评价</b></div>
+
   <div id="errbox" hidden></div>
 
   <div id="report" hidden>
@@ -64,138 +119,291 @@
       <div class="t" id="p-title"></div>
     </div>
 
-    <div class="card">
-      <div class="grade-row">
-        <div class="grade-letter" id="grade">-</div>
-        <div class="grade-meta">
-          <div class="rating-line" id="rating-line" hidden>
-            <span class="old" id="rating-old"></span>
-            <span style="color:var(--gray)"> → </span>
-            <span class="adj" id="rating-adj"></span>
-            <span style="font-size:13px;color:var(--gray)">（真实评论均分）</span>
-          </div>
-          <div class="bar" id="bar">
-            <div style="background:var(--green)" id="bar-g"></div>
-            <div style="background:var(--yellow)" id="bar-s"></div>
-            <div style="background:#cbd5e1" id="bar-x"></div>
-          </div>
-          <div class="legend">
-            <span><i style="background:var(--green)"></i>真实 <b id="n-g">0</b></span>
-            <span><i style="background:var(--yellow)"></i>可疑 <b id="n-s">0</b></span>
-            <span><i style="background:#cbd5e1"></i>边界 <b id="n-x">0</b></span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="card ai-card" id="ai-card"></div>
 
-    <div class="tabs">
-      <button class="on" id="tab-btn-0" onclick="switchTab(0)">真实评论</button>
-      <button id="tab-btn-1" onclick="switchTab(1)">疑似水军</button>
+    <div class="seg">
+      <button class="on" id="tab-btn-0" onclick="switchTab(0)">真实评论<span class="n" id="cnt-gen">0</span></button>
+      <button id="tab-btn-1" onclick="switchTab(1)">疑似水军<span class="n" id="cnt-sus">0</span></button>
       <button id="tab-btn-2" onclick="switchTab(2)">数据</button>
     </div>
 
-    <div class="card" id="tab-0"></div>
+    <div id="panel-0">
+      <div class="card">
+        <div class="panel-title">用户评价 · <span class="cnt" id="panel-cnt">0</span></div>
+        <div class="chips-flow" id="filter-row"></div>
+        <div class="trust-row">
+          <div class="trust"><span class="badge">✓</span><span id="trust-text"></span></div>
+          <button class="sortsel" id="sort-btn" onclick="toggleSort()">✨ <span class="ai-mark">按价值</span>排序 ▾</button>
+        </div>
+      </div>
+      <div class="card" id="tab-0"></div>
+    </div>
+
     <div class="card" id="tab-1" hidden></div>
     <div class="card" id="tab-2" hidden></div>
   </div>
 </div>
+<div id="toast"></div>
 
 <script>
-// 渲染逻辑抽取自 web/index.html 的 renderReport（index.html 保持原样），
-// 本页是其子集功能：读 ?id= → GET /api/report/<id> → 渲染，无输入无设置。
-const GRADE_COLORS = { A: '#16a34a', B: '#2563eb', C: '#ca8a04', D: '#ea580c', F: '#dc2626', U: '#6b7280' };
+// 数据源：GET /api/report/<id>；交互骨架移植自 web/mockups/v0.2_report_preview.html。
+// AI 卡三态 + 4s 轮询（24 次封顶）为本页相对 mockup 的实质差异之一。
+const GRADE_COLORS = {}; // V0.2：评级评分卡已砍，保留占位防旧引用
+let REPORT = null, curId = null;
+let curFilter = { key: "all", dim: null };
+let sortBy = "value";
+let pollTimer = null, pollN = 0;
+const DIM_ORDER = ["电池续航很好", "减震效果出色", "做工扎实", "性价比高", "外观时尚", "服务态度很好", "使用体验很棒"];
 
 async function load() {
-  const id = new URLSearchParams(location.search).get('id');
-  if (!id) { showError('缺少报告 id，请从扩展重新发起分析'); return; }
+  const id = new URLSearchParams(location.search).get("id");
+  if (!id) { showError("缺少报告 id，请从扩展重新发起分析"); return; }
+  curId = id;
   try {
-    const resp = await fetch('/api/report/' + encodeURIComponent(id));
-    if (resp.status === 404) { showError('报告不存在或已被清理，请从扩展重新发起分析'); return; }
+    const resp = await fetch("/api/report/" + encodeURIComponent(id));
+    if (resp.status === 404) { showError("报告不存在或已被清理，请从扩展重新发起分析"); return; }
     const data = await resp.json();
-    if (data.error) { showError('报告错误：' + data.error.message); return; }
+    if (data.error) { showError("报告错误：" + data.error.message); return; }
     renderReport(data);
   } catch (e) {
-    showError('无法连接服务，请确认电脑上服务已启动');
+    showError("无法连接服务，请确认电脑上服务已启动");
   }
 }
 
 function showError(msg) {
-  const box = document.getElementById('errbox');
+  const box = document.getElementById("errbox");
   box.hidden = false;
   box.textContent = msg;
 }
 
-function chip(text, cls) {
-  return '<span class="chip ' + (cls || '') + '">' + esc(text) + '</span>';
+// ===== AI 卡三态 + 轮询 =====
+
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function maybePoll(d) {
+  stopPoll();
+  if (!d.llm || d.llm.status !== "pending") return;
+  pollN = 0;
+  pollTimer = setInterval(async () => {
+    pollN += 1;
+    if (pollN >= 24) {  // 24 次 × 4s 封顶，停止后保留 pending 文案
+      stopPoll();
+      const note = document.getElementById("ai-note");
+      if (note) note.textContent = "⏳ AI 分析仍在进行，可下拉刷新查看";
+      return;
+    }
+    try {
+      const resp = await fetch("/api/report/" + encodeURIComponent(curId));
+      if (!resp.ok) return;
+      const nd = await resp.json();
+      if (nd.llm && nd.llm.status !== "pending") { renderReport(nd); }
+    } catch (e) { /* 网络抖动下一轮再试 */ }
+  }, 4000);
 }
 
-function renderReport(d) {
-  document.getElementById('report').hidden = false;
-  document.getElementById('p-title').textContent = d.product.title || '（未取到商品标题）';
-  const img = document.getElementById('p-img');
-  if (d.product.image_url) { img.src = d.product.image_url; img.hidden = false; } else { img.hidden = true; }
-
-  const g = document.getElementById('grade');
-  g.textContent = d.grade || '-';
-  g.style.color = GRADE_COLORS[d.grade] || '#1f2937';
-
-  const line = document.getElementById('rating-line');
-  const ro = d.rating.original, ra = d.rating.adjusted;
-  if (ro == null && ra == null) { line.hidden = true; }
-  else {
-    line.hidden = false;
-    document.getElementById('rating-old').textContent = (ro == null ? '' : '★' + ro);
-    document.getElementById('rating-adj').textContent = ra == null ? '—' : '★' + ra;
+function renderAiCard(d) {
+  const llm = d.llm || { status: "skipped" };
+  const card = document.getElementById("ai-card");
+  if (llm.status === "done" && llm.summary) {
+    const s = llm.summary;
+    const praise = (s.praise || []).map(p => "<span class='chip'>" + esc(p.dim) + "</span>").join("");
+    const complain = (s.complain || []).map(c => esc(c.dim) + "（" + esc(c.note) + "）").join("；") || "无明显集中吐槽";
+    card.innerHTML =
+      "<div class='ai-head'>✨ AI 划重点</div>" +
+      "<div class='ai-line'><span class='k'>👍 在夸</span><span class='v ai-chips'>" +
+      (praise || "<span style='font-size:14px;color:var(--gray)'>—</span>") + "</span></div>" +
+      "<div class='ai-line'><span class='k'>👎 在吐槽</span><span class='v' style='font-size:14px;color:var(--gray)'>" +
+      esc(complain) + "</span></div>" +
+      "<div class='ai-line'><span class='k'>💡 建议</span><span class='v'>" + esc(s.advice || "") + "</span></div>" +
+      "<div class='ai-note' id='ai-note'>⏱ AI 增值完成（deepseek-chat · " + (llm.elapsed_sec || "?") + " 秒）</div>";
+    return;
   }
+  if (llm.status === "pending") {
+    card.innerHTML =
+      "<div class='ai-head'>✨ AI 划重点</div>" +
+      "<div class='ai-status'>⏳ AI 分析中…结果将自动浮现</div>" +
+      "<div class='ai-note' id='ai-note'>先展示规则层结果；AI 终审/打分/划重点约 1 分钟后自动补全</div>";
+    return;
+  }
+  if (llm.status === "failed") {
+    card.innerHTML =
+      "<div class='ai-head'>✨ AI 划重点</div>" +
+      "<div class='ai-status'>AI 分析失败，已展示规则层结果</div>" +
+      "<div class='ai-note'>" + esc(llm.error || "") + "</div>";
+    return;
+  }
+  card.innerHTML =
+    "<div class='ai-head'>✨ AI 划重点</div>" +
+    "<div class='ai-status'>未配置 DeepSeek key，AI 增值未启用</div>" +
+    "<div class='ai-note'>在 config_local.py 配置 DEEPSEEK_API_KEY 后重启服务即可启用</div>";
+}
 
-  const st = d.stats, total = Math.max(st.total, 1);
-  document.getElementById('bar-g').style.width = (st.genuine / total * 100) + '%';
-  document.getElementById('bar-s').style.width = (st.suspicious / total * 100) + '%';
-  document.getElementById('bar-x').style.width = (st.gray / total * 100) + '%';
-  document.getElementById('n-g').textContent = st.genuine;
-  document.getElementById('n-s').textContent = st.suspicious;
-  document.getElementById('n-x').textContent = st.gray;
+// ===== 筛选 / 排序 =====
 
-  const genuine = d.reviews.filter(r => r.verdict === 'genuine');
-  const gray = d.reviews.filter(r => r.verdict === 'gray');
-  const html = genuine.map(r =>
-    '<div class="review"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
-    (r.tags || []).map(t => chip(t)).join('') + chip(r.date || '', 'date') + '</div></div>'
-  ).join('')
-  + (gray.length ? '<div class="review dim"><div class="chips" style="margin-bottom:6px">' + chip('边界（未判定）', 'gray') + '</div></div>' : '')
-  + gray.map(r =>
-    '<div class="review dim"><div class="txt">' + esc(r.text) + '</div><div class="chips">' +
-    (r.tags || []).map(t => chip(t, 'gray')).join('') + chip(r.date || '', 'date') + chip('边界', 'gray') + '</div></div>'
-  ).join('');
-  document.getElementById('tab-0').innerHTML = html || '<div class="hint">没有评论</div>';
+function stat(list, fn) { return list.filter(fn).length; }
 
-  const sus = d.suspicious.map(r =>
-    '<div class="review"><div class="txt">' + esc(r.text) + '</div>' +
-    '<div class="reason">⚠ ' + (r.reasons || []).map(esc).join('；') + '</div>' +
-    '<div class="chips" style="margin-top:6px">' + chip(r.date || '', 'date') + '</div></div>'
-  ).join('');
-  document.getElementById('tab-1').innerHTML = sus || '<div class="hint">没有发现疑似水军评论</div>';
+function buildFilter() {
+  const rs = REPORT.reviews || [];
+  const c = {
+    all: rs.length,
+    star: stat(rs, r => (r.score || 0) >= 4),
+    photo: stat(rs, r => (r.images || []).length > 0),
+    append: stat(rs, r => !!r.append_text || (r.tags || []).includes("追评")),
+  };
+  const dims = {};
+  rs.forEach(r => (r.dims || []).forEach(d => dims[d] = (dims[d] || 0) + 1));
+  let h =
+    chipHtml("all", "全部", c.all) +
+    chipHtml("star", "⭐ 高价值", c.star) +
+    chipHtml("photo", "图/视频", c.photo) +
+    chipHtml("append", "追评", c.append);
+  DIM_ORDER.forEach(d => { if (dims[d]) h += chipHtmlDim(d, dims[d]); });
+  document.getElementById("filter-row").innerHTML = h;
+}
 
-  document.getElementById('tab-2').innerHTML =
-    '<table class="meta">' +
-    '<tr><td>来源</td><td>浏览器扩展</td></tr>' +
-    '<tr><td>抓取评论数</td><td>' + d.meta.fetched_count + '</td></tr>' +
-    '<tr><td>有效评论数（清洗后）</td><td>' + st.total + '</td></tr>' +
-    '<tr><td>分析耗时</td><td>' + d.meta.elapsed_sec + ' 秒</td></tr>' +
-    '</table>';
+function chipHtml(key, label, n) {
+  const on = curFilter.key === key && !curFilter.dim ? " on" : "";
+  return '<button class="fchip' + on + '" onclick="setKey(\'' + key + '\')">' + esc(label) + '<span class="c">' + n + '</span></button>';
+}
+function chipHtmlDim(d, n) {
+  const on = curFilter.dim === d ? " on" : "";
+  return '<button class="fchip' + on + '" onclick="setDim(\'' + esc(d) + '\')">' + esc(d) + '<span class="c">' + n + '</span></button>';
+}
+function setKey(k) { curFilter = { key: (curFilter.key === k && !curFilter.dim) ? "all" : k, dim: null }; buildFilter(); renderList(); }
+function setDim(d) { curFilter = curFilter.dim === d ? { key: "all", dim: null } : { key: "all", dim: d }; buildFilter(); renderList(); }
+function toggleSort() {
+  sortBy = sortBy === "value" ? "newest" : "value";
+  document.getElementById("sort-btn").innerHTML = sortBy === "value"
+    ? '✨ <span class="ai-mark">按价值</span>排序 ▾' : '按<span class="ai-mark">最新</span>排序 ▾';
+  renderList();
+}
+
+// ===== 列表渲染 =====
+
+function visibleList() {
+  let list = (REPORT.reviews || []).slice();
+  if (curFilter.key === "star") list = list.filter(r => (r.score || 0) >= 4);
+  if (curFilter.key === "photo") list = list.filter(r => (r.images || []).length > 0);
+  if (curFilter.key === "append") list = list.filter(r => !!r.append_text || (r.tags || []).includes("追评"));
+  if (curFilter.dim) list = list.filter(r => (r.dims || []).includes(curFilter.dim));
+  if (sortBy === "value") list.sort((a, b) => (b.score || 0) - (a.score || 0));
+  else list.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  return list;
+}
+
+function imgsHtml(r) {
+  const arr = r.images || [];
+  if (!arr.length) return "";
+  return "<div class='imgs'>" + arr.map(u =>
+    "<a class='ph' href='" + esc(u) + "' target='_blank' rel='noopener'>" +
+    "<img src='" + esc(u) + "' loading='lazy' alt='' onerror='this.parentNode.remove()'></a>").join("") + "</div>";
+}
+
+function chipsOf(r) {
+  let c = [];
+  if ((r.score || 0) >= 4) c.push("<span class='chip star'>⭐ 高价值</span>");
+  (r.dims || []).forEach(d => c.push("<span class='chip dim'>" + esc(d) + "</span>"));
+  (r.tags || []).forEach(t => c.push("<span class='chip'>" + esc(t) + "</span>"));
+  if (r.llm) c.push("<span class='chip llm'>✨ " + esc(r.llm) + "</span>");
+  c.push("<span class='chip date'>" + esc(r.date || "") + "</span>");
+  return c.join("");
+}
+
+function renderList() {
+  const list = visibleList();
+  const html = list.map(r => {
+    const photoOnly = !r.text && (r.images || []).length > 0;
+    if (photoOnly) {
+      return "<div class='review'><div class='photo-only' style='color:var(--gray)'>📷 无文字 · 仅图</div>" +
+        imgsHtml(r) + "<div class='chips' style='margin-top:8px'>" + chipsOf(r) + "</div></div>";
+    }
+    let h = "<div class='review'><div class='txt'>" + esc(r.text) + "</div>";
+    if (r.append_text) {
+      h += "<div class='append'><span class='tag'>追评</span><div class='txt'>" + esc(r.append_text) + "</div></div>";
+    }
+    h += imgsHtml(r);
+    h += "<div class='chips' style='margin-top:8px'>" + chipsOf(r) + "</div>";
+    if (r.sku) h += "<div class='sku-line'>已购：" + esc(r.sku) + "</div>";
+    return h + "</div>";
+  }).join("");
+  document.getElementById("tab-0").innerHTML = html || "<div class='hint'>该筛选条件下暂无评论</div>";
+}
+
+// ===== 主渲染 =====
+
+function renderReport(d) {
+  REPORT = d;
+  document.getElementById("report").hidden = false;
+  document.getElementById("p-title").textContent = (d.product && d.product.title) || "（未取到商品标题）";
+  const img = document.getElementById("p-img");
+  if (d.product && d.product.image_url) { img.src = d.product.image_url; img.hidden = false; }
+  else { img.hidden = true; }
+
+  renderAiCard(d);
+  maybePoll(d);
+
+  const st = d.stats || { total: 0, genuine: 0, suspicious: 0, gray: 0 };
+  document.getElementById("cnt-gen").textContent = (d.reviews || []).length;
+  document.getElementById("cnt-sus").textContent = (d.suspicious || []).length;
+  document.getElementById("panel-cnt").textContent = (d.reviews || []).length;
+  document.getElementById("trust-text").textContent =
+    "为你展示真实评价 · 共 " + st.total + " 条 · 已过滤 " + st.suspicious + " 条水军";
+
+  curFilter = { key: "all", dim: null };
+  buildFilter();
+  renderList();
+
+  // 疑似水军 tab
+  const sus = (d.suspicious || []).map(r =>
+    "<div class='review'><div class='txt'>" + esc(r.text) + "</div>" +
+    "<div class='reason'>⚠ " + (r.reasons || []).map(esc).join("；") + "</div>" +
+    (r.llm ? "<div style='margin-top:4px'><span class='chip llm'>✨ " + esc(r.llm) + "</span></div>" : "") +
+    "<div class='chips' style='margin-top:6px'><span class='chip date'>" + esc(r.date || "") + "</span></div></div>"
+  ).join("");
+  document.getElementById("tab-1").innerHTML = sus || "<div class='hint'>没有发现疑似水军评论</div>";
+
+  // 数据 tab
+  const aiText = !(d.llm) ? "未启用"
+    : d.llm.status === "done" ? "✨ 已完成（deepseek-chat · " + (d.llm.elapsed_sec || "?") + " 秒）"
+    : d.llm.status === "pending" ? "⏳ 分析中…"
+    : d.llm.status === "failed" ? "失败（已展示规则层结果）"
+    : "未配置";
+  const genPart = (d.llm && d.llm.status === "done") ? "（✨ AI 终审后）" : "";
+  document.getElementById("tab-2").innerHTML =
+    "<table class='meta'>" +
+    "<tr><td>来源</td><td>浏览器扩展</td></tr>" +
+    "<tr><td>评价总数（面板标称）</td><td>" + esc(d.meta.total_declared == null ? "—" : d.meta.total_declared) + "</td></tr>" +
+    "<tr><td>抓取评论数</td><td>" + esc(d.meta.fetched_count) + "</td></tr>" +
+    "<tr><td>有效评论数（清洗后）</td><td>" + st.total + "</td></tr>" +
+    "<tr><td>真实 / 可疑 / 边界</td><td>" + st.genuine + " / " + st.suspicious + " / " + st.gray + genPart + "</td></tr>" +
+    "<tr><td>AI 增值</td><td>" + esc(aiText) + "</td></tr>" +
+    (d.meta.truncated_by_timeout ? "<tr><td>数据截断</td><td>⚠ 抓取超时，仅返回已抓取部分</td></tr>" : "") +
+    "<tr><td>分析耗时</td><td>" + esc(d.meta.elapsed_sec) + " 秒</td></tr>" +
+    "</table>" +
+    (d.meta.total_declared != null && d.meta.fetched_count < d.meta.total_declared
+      ? "<div class='hint'>抓取 " + esc(d.meta.fetched_count) + " / 总数 " + esc(d.meta.total_declared) +
+        "：面板懒加载与采集上限所致，样本已覆盖近期主流评价。</div>" : "");
   switchTab(0);
 }
 
 function switchTab(i) {
-  for (let k = 0; k < 3; k++) {
-    document.getElementById('tab-' + k).hidden = (k !== i);
-    document.getElementById('tab-btn-' + k).classList.toggle('on', k === i);
-  }
+  document.getElementById("panel-0").hidden = (i !== 0);
+  document.getElementById("tab-1").hidden = (i !== 1);
+  document.getElementById("tab-2").hidden = (i !== 2);
+  for (let k = 0; k < 3; k++) document.getElementById("tab-btn-" + k).classList.toggle("on", k === i);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.opacity = 0, 1800);
 }
 
 function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 load();

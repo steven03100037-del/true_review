@@ -16,3 +16,6 @@ chrome-profile/
 # 上游分析产物：samples/ 含登录态页面快照，严禁提交入库（V0.1.2 笔 §6）
 tmp/
 samples/
+
+# 本地数据库（报告落库，V0.2-A）
+backend/data/
